@@ -14,3 +14,5 @@ build/
 lite.ai.toolkit.cmake
 TestExamples
 
+ultralytics
+YOLOv8-TensorRT
