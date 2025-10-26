@@ -56,7 +56,7 @@ void BasicTRTHandler::initialize_handler()
         model_offset = sizeof(int32_t) + metadata_length;
         model_size = total_file_size - model_offset;
         file.seekg(model_offset, std::ifstream::beg);
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
         std::cout << "Detected Ultralytics metadata header (" << metadata_length
                   << " bytes), skipping to TensorRT engine at offset "
                   << model_offset << std::endl;
@@ -94,7 +94,7 @@ void BasicTRTHandler::initialize_handler()
         trt_engine->getNbIOTensors();  // get the input and output's num
     buffers.resize(num_io_tensors);
 
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
     std::cout << "Total I/O tensors: " << num_io_tensors << std::endl;
 #endif
 
@@ -104,7 +104,7 @@ void BasicTRTHandler::initialize_handler()
         nvinfer1::Dims tensor_dims = trt_engine->getTensorShape(tensor_name);
         auto io_mode = trt_engine->getTensorIOMode(tensor_name);
 
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
         std::cout << "Tensor[" << i << "] name=" << tensor_name << " mode="
                   << (io_mode == nvinfer1::TensorIOMode::kINPUT ? "INPUT"
                                                                 : "OUTPUT")

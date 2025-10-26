@@ -8,10 +8,7 @@
 #include "lite/config.h"
 #include "lite/lite.ai.defs.h"
 
-#ifdef ENABLE_DEBUG_STRING
-# define LITETRT_DEBUG 1
-#else
-# define LITEORT_DEBUG 0
-#endif
+// Disable TensorRT debug output
+#define LITETRT_DEBUG 0
 
-#endif //LITE_AI_TOOLKIT_TRT_DEFS_H
+#endif  // LITE_AI_TOOLKIT_TRT_DEFS_H

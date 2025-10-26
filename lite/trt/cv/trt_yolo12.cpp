@@ -23,7 +23,7 @@ void TRTYOLO12::auto_detect_nms_plugin()
         }
     }
 
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
     std::cout << "YOLO12 NMS plugin detected: "
               << (has_nms_plugin ? "Yes" : "No") << std::endl;
     if (has_nms_plugin)
@@ -118,7 +118,7 @@ void TRTYOLO12::detect(const cv::Mat &mat,
     cv::Size target_size(target_width, target_height);
     this->letterbox(mat, processed_mat, target_size, scale_params);
 
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
     std::cout << "Input image: " << mat.rows << "x" << mat.cols << std::endl;
     std::cout << "Processed image: " << processed_mat.rows << "x"
               << processed_mat.cols << " channels=" << processed_mat.channels()
@@ -135,7 +135,7 @@ void TRTYOLO12::detect(const cv::Mat &mat,
     trtcv::utils::transform::create_tensor(
         processed_mat, input, input_node_dims, trtcv::utils::transform::CHW);
 
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
     size_t expected_size = input_node_dims[0] * input_node_dims[1] *
                            input_node_dims[2] * input_node_dims[3];
     std::cout << "Created tensor size: " << input.size()
@@ -154,7 +154,7 @@ void TRTYOLO12::detect(const cv::Mat &mat,
         buffers[0], input.data(), input_size, cudaMemcpyHostToDevice, stream);
     if (cuda_status != cudaSuccess)
     {
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
         std::cout << "CUDA memcpy failed: " << cudaGetErrorString(cuda_status)
                   << std::endl;
 #endif
@@ -162,7 +162,7 @@ void TRTYOLO12::detect(const cv::Mat &mat,
     }
     cudaStreamSynchronize(stream);
 
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
     std::cout << "Data copied to GPU successfully" << std::endl;
 #endif
 
@@ -171,7 +171,7 @@ void TRTYOLO12::detect(const cv::Mat &mat,
     cudaStreamSynchronize(stream);
     if (!status)
     {
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
         std::cout << "TensorRT inference failed!" << std::endl;
 #endif
         return;
@@ -221,7 +221,7 @@ void TRTYOLO12::generate_bboxes_with_nms(
 
     if (output_node_dims.size() < 1)
     {
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
         std::cout << "Warning: No output node dims available" << std::endl;
 #endif
         return;
@@ -230,7 +230,7 @@ void TRTYOLO12::generate_bboxes_with_nms(
     auto &dims = output_node_dims[0];
     if (dims.size() != 3 || dims[2] != 6)
     {
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
         std::cout << "Warning: Unexpected output format for NMS model"
                   << std::endl;
 #endif
@@ -286,7 +286,7 @@ void TRTYOLO12::generate_bboxes_with_nms(
         bbox_collection.push_back(box);
     }
 
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
     std::cout << "Detected " << bbox_collection.size()
               << " objects from NMS output" << std::endl;
 #endif
@@ -360,7 +360,7 @@ void TRTYOLO12::generate_bboxes(const YOLO12ScaleParams &scale_params,
         if (count > max_nms) break;
     }
 
-#ifdef LITETRT_DEBUG
+#if LITETRT_DEBUG
     std::cout << "detected num_anchors: " << num_anchors << std::endl;
     std::cout << "generate_bboxes num: " << bbox_collection.size() << std::endl;
 #endif
