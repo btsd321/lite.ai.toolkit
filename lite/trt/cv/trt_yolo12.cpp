@@ -2,46 +2,41 @@
 // Created by DefTruth on 2024/10/26.
 //
 
-#include "trt_yolo12.h"
 #include "lite/trt/core/trt_utils.h"
 #include "lite/utils.h"
+#include "trt_yolo12.h"
 
 using trtcv::TRTYOLO12;
 
 void TRTYOLO12::auto_detect_nms_plugin()
 {
     // 检测模型是否包含NMS插件
-    // 通常自带NMS的模型会有多个输出：num_dets, det_boxes, det_scores, det_classes
-    // 而标准模型只有一个输出
-    if (output_node_dims.size() >= 3)
+    // Ultralytics YOLO12 with end2end=True exports with shape [1, max_det, 6]
+    // where 6 = [x1, y1, x2, y2, score, class]
+    if (output_node_dims.size() >= 1)
     {
-        // 检查输出的形状特征
-        bool likely_nms = false;
-        for (const auto &dims : output_node_dims)
+        auto &dims = output_node_dims[0];
+        // Check for post-NMS output format: [batch, max_det, 6]
+        if (dims.size() == 3 && dims[2] == 6)
         {
-            // NMS输出通常包含固定数量的检测框（如100）
-            if (dims.size() >= 2 && (dims[1] == 100 || dims[1] == 300 || dims[1] == 1000))
-            {
-                likely_nms = true;
-                break;
-            }
+            has_nms_plugin = true;
         }
-        has_nms_plugin = likely_nms;
     }
 
 #ifdef LITETRT_DEBUG
-    std::cout << "YOLO12 NMS plugin detected: " << (has_nms_plugin ? "Yes" : "No") << std::endl;
+    std::cout << "YOLO12 NMS plugin detected: "
+              << (has_nms_plugin ? "Yes" : "No") << std::endl;
     if (has_nms_plugin)
     {
-        std::cout << "Model has " << output_node_dims.size() << " outputs" << std::endl;
+        std::cout << "Model has post-NMS output with "
+                  << output_node_dims.size() << " outputs" << std::endl;
         for (size_t i = 0; i < output_node_dims.size(); ++i)
         {
             std::cout << "Output " << i << " shape: [";
             for (size_t j = 0; j < output_node_dims[i].size(); ++j)
             {
                 std::cout << output_node_dims[i][j];
-                if (j < output_node_dims[i].size() - 1)
-                    std::cout << ", ";
+                if (j < output_node_dims[i].size() - 1) std::cout << ", ";
             }
             std::cout << "]" << std::endl;
         }
@@ -49,7 +44,8 @@ void TRTYOLO12::auto_detect_nms_plugin()
 #endif
 }
 
-void TRTYOLO12::letterbox(const cv::Mat &image, cv::Mat &out, cv::Size &size, YOLO12ScaleParams &scale_params)
+void TRTYOLO12::letterbox(const cv::Mat &image, cv::Mat &out, cv::Size &size,
+                          YOLO12ScaleParams &scale_params)
 {
     const float inp_h = size.height;
     const float inp_w = size.width;
@@ -80,24 +76,11 @@ void TRTYOLO12::letterbox(const cv::Mat &image, cv::Mat &out, cv::Size &size, YO
     int left = int(std::round(dw - 0.1f));
     int right = int(std::round(dw + 0.1f));
 
-    cv::copyMakeBorder(tmp, tmp, top, bottom, left, right, cv::BORDER_CONSTANT, {114, 114, 114});
+    cv::copyMakeBorder(tmp, tmp, top, bottom, left, right, cv::BORDER_CONSTANT,
+                       {114, 114, 114});
 
-    // Convert to float and normalize
-    tmp.convertTo(tmp, CV_32F, 1.0 / 255.0);
-
-    // Convert from HWC to CHW format
-    out.create({1, 3, (int)inp_h, (int)inp_w}, CV_32F);
-    std::vector<cv::Mat> channels;
-    cv::split(tmp, channels);
-
-    cv::Mat c0((int)inp_h, (int)inp_w, CV_32F, (float *)out.data);
-    cv::Mat c1((int)inp_h, (int)inp_w, CV_32F, (float *)out.data + (int)inp_h * (int)inp_w);
-    cv::Mat c2((int)inp_h, (int)inp_w, CV_32F, (float *)out.data + (int)inp_h * (int)inp_w * 2);
-
-    // BGR to RGB conversion
-    channels[2].copyTo(c0); // R
-    channels[1].copyTo(c1); // G
-    channels[0].copyTo(c2); // B
+    // Convert to float and normalize to [0, 1]
+    tmp.convertTo(out, CV_32FC3, 1.0 / 255.0);
 
     // Record scale params
     scale_params.r = r;
@@ -112,18 +95,17 @@ void TRTYOLO12::resize_unscale(const cv::Mat &mat, cv::Mat &mat_rs,
                                int target_height, int target_width,
                                YOLO12ScaleParams &scale_params)
 {
-    if (mat.empty())
-        return;
+    if (mat.empty()) return;
     cv::Size target_size(target_width, target_height);
     this->letterbox(mat, mat_rs, target_size, scale_params);
 }
 
-void TRTYOLO12::detect(const cv::Mat &mat, std::vector<types::Boxf> &detected_boxes,
+void TRTYOLO12::detect(const cv::Mat &mat,
+                       std::vector<types::Boxf> &detected_boxes,
                        float score_threshold, float iou_threshold,
                        unsigned int topk, unsigned int nms_type)
 {
-    if (mat.empty())
-        return;
+    if (mat.empty()) return;
 
     int img_height = static_cast<int>(mat.rows);
     int img_width = static_cast<int>(mat.cols);
@@ -136,15 +118,53 @@ void TRTYOLO12::detect(const cv::Mat &mat, std::vector<types::Boxf> &detected_bo
     cv::Size target_size(target_width, target_height);
     this->letterbox(mat, processed_mat, target_size, scale_params);
 
+#ifdef LITETRT_DEBUG
+    std::cout << "Input image: " << mat.rows << "x" << mat.cols << std::endl;
+    std::cout << "Processed image: " << processed_mat.rows << "x"
+              << processed_mat.cols << " channels=" << processed_mat.channels()
+              << " type=" << processed_mat.type() << std::endl;
+    std::cout << "Target size: " << target_width << "x" << target_height
+              << std::endl;
+    std::cout << "Expected input dims: [" << input_node_dims[0] << ", "
+              << input_node_dims[1] << ", " << input_node_dims[2] << ", "
+              << input_node_dims[3] << "]" << std::endl;
+#endif
+
     // 2. Make input tensor
     std::vector<float> input;
-    trtcv::utils::transform::create_tensor(processed_mat, input, input_node_dims, trtcv::utils::transform::CHW);
+    trtcv::utils::transform::create_tensor(
+        processed_mat, input, input_node_dims, trtcv::utils::transform::CHW);
+
+#ifdef LITETRT_DEBUG
+    size_t expected_size = input_node_dims[0] * input_node_dims[1] *
+                           input_node_dims[2] * input_node_dims[3];
+    std::cout << "Created tensor size: " << input.size()
+              << ", expected: " << expected_size << std::endl;
+    if (!input.empty())
+    {
+        std::cout << "First few values: " << input[0] << ", " << input[1]
+                  << ", " << input[2] << std::endl;
+    }
+#endif
 
     // 3. Copy to GPU memory
-    cudaMemcpyAsync(buffers[0], input.data(),
-                    input_node_dims[0] * input_node_dims[1] * input_node_dims[2] * input_node_dims[3] * sizeof(float),
-                    cudaMemcpyHostToDevice, stream);
+    size_t input_size = input_node_dims[0] * input_node_dims[1] *
+                        input_node_dims[2] * input_node_dims[3] * sizeof(float);
+    cudaError_t cuda_status = cudaMemcpyAsync(
+        buffers[0], input.data(), input_size, cudaMemcpyHostToDevice, stream);
+    if (cuda_status != cudaSuccess)
+    {
+#ifdef LITETRT_DEBUG
+        std::cout << "CUDA memcpy failed: " << cudaGetErrorString(cuda_status)
+                  << std::endl;
+#endif
+        return;
+    }
     cudaStreamSynchronize(stream);
+
+#ifdef LITETRT_DEBUG
+    std::cout << "Data copied to GPU successfully" << std::endl;
+#endif
 
     // 4. Inference
     bool status = trt_context->enqueueV3(stream);
@@ -162,26 +182,21 @@ void TRTYOLO12::detect(const cv::Mat &mat, std::vector<types::Boxf> &detected_bo
     // 5. Get output dimensions
     auto pred_dims = output_node_dims[0];
 
-    // 6. Copy outputs from GPU
+    // 6. Copy outputs from GPU and parse
     if (has_nms_plugin)
     {
-        // NMS模型有多个输出
-        // 这里需要根据实际NMS插件的输出格式处理
-        // 暂时使用标准输出处理
-        std::vector<float> output(pred_dims[0] * pred_dims[1] * pred_dims[2]);
-        cudaMemcpyAsync(output.data(), buffers[1], pred_dims[0] * pred_dims[1] * pred_dims[2] * sizeof(float),
-                        cudaMemcpyDeviceToHost, stream);
-        cudaStreamSynchronize(stream);
-
-        // 生成检测框（NMS版本）
-        this->generate_bboxes_with_nms(scale_params, detected_boxes, score_threshold, img_height, img_width);
+        // Ultralytics end2end=True model - output already has NMS applied
+        this->generate_bboxes_with_nms(scale_params, detected_boxes,
+                                       score_threshold, img_height, img_width);
     }
     else
     {
-        // 标准模型处理
+        // Standard model - need to apply NMS
         std::vector<float> output(pred_dims[0] * pred_dims[1] * pred_dims[2]);
-        cudaMemcpyAsync(output.data(), buffers[1], pred_dims[0] * pred_dims[1] * pred_dims[2] * sizeof(float),
-                        cudaMemcpyDeviceToHost, stream);
+        cudaMemcpyAsync(
+            output.data(), buffers[1],
+            pred_dims[0] * pred_dims[1] * pred_dims[2] * sizeof(float),
+            cudaMemcpyDeviceToHost, stream);
         cudaStreamSynchronize(stream);
 
         // 生成检测框
@@ -190,48 +205,101 @@ void TRTYOLO12::detect(const cv::Mat &mat, std::vector<types::Boxf> &detected_bo
                               score_threshold, img_height, img_width);
 
         // NMS
-        this->nms(bbox_collection, detected_boxes, iou_threshold, topk, nms_type);
+        this->nms(bbox_collection, detected_boxes, iou_threshold, topk,
+                  nms_type);
     }
 }
 
-void TRTYOLO12::generate_bboxes_with_nms(const YOLO12ScaleParams &scale_params,
-                                         std::vector<types::Boxf> &bbox_collection,
-                                         float score_threshold, int img_height, int img_width)
+void TRTYOLO12::generate_bboxes_with_nms(
+    const YOLO12ScaleParams &scale_params,
+    std::vector<types::Boxf> &bbox_collection, float score_threshold,
+    int img_height, int img_width)
 {
-    // 处理包含NMS插件的模型输出
-    // 典型的输出格式：
-    // output[0]: num_dets [batch]
-    // output[1]: det_boxes [batch, max_det, 4]
-    // output[2]: det_scores [batch, max_det]
-    // output[3]: det_classes [batch, max_det]
-
+    // 处理Ultralytics end2end=True模型的输出
+    // 输出格式：[batch, max_det, 6] where 6 = [x1, y1, x2, y2, score, class]
     bbox_collection.clear();
 
-    if (output_node_dims.size() < 4)
+    if (output_node_dims.size() < 1)
     {
 #ifdef LITETRT_DEBUG
-        std::cout << "Warning: Expected 4 outputs for NMS model, got " << output_node_dims.size() << std::endl;
+        std::cout << "Warning: No output node dims available" << std::endl;
 #endif
-        // TODO: 当前版本暂不支持NMS插件，回退到标准处理
         return;
     }
 
-    // TODO: 实现NMS插件输出的解析
-    // 当前版本需要用户使用标准模型（不带nms=True）
+    auto &dims = output_node_dims[0];
+    if (dims.size() != 3 || dims[2] != 6)
+    {
+#ifdef LITETRT_DEBUG
+        std::cout << "Warning: Unexpected output format for NMS model"
+                  << std::endl;
+#endif
+        return;
+    }
+
+    // 从GPU复制输出
+    const int max_det = dims[1];
+    std::vector<float> output(max_det * 6);
+    cudaMemcpyAsync(output.data(), buffers[1], max_det * 6 * sizeof(float),
+                    cudaMemcpyDeviceToHost, stream);
+    cudaStreamSynchronize(stream);
+
+    float r_ = scale_params.r;
+    int dw_ = scale_params.dw;
+    int dh_ = scale_params.dh;
+
+    // 解析检测结果
+    for (int i = 0; i < max_det; ++i)
+    {
+        float *det = &output[i * 6];
+        float x1 = det[0];
+        float y1 = det[1];
+        float x2 = det[2];
+        float y2 = det[3];
+        float score = det[4];
+        float class_id = det[5];
+
+        // 跳过无效检测（score为0或负数）
+        if (score <= score_threshold) continue;
+
+        // 反归一化坐标
+        x1 = (x1 - dw_) / r_;
+        y1 = (y1 - dh_) / r_;
+        x2 = (x2 - dw_) / r_;
+        y2 = (y2 - dh_) / r_;
+
+        // 裁剪到图像边界
+        x1 = std::max(std::min(x1, (float)img_width - 1.0f), 0.0f);
+        y1 = std::max(std::min(y1, (float)img_height - 1.0f), 0.0f);
+        x2 = std::max(std::min(x2, (float)img_width - 1.0f), 0.0f);
+        y2 = std::max(std::min(y2, (float)img_height - 1.0f), 0.0f);
+
+        types::Boxf box;
+        box.x1 = x1;
+        box.y1 = y1;
+        box.x2 = x2;
+        box.y2 = y2;
+        box.score = score;
+        box.label = static_cast<unsigned int>(class_id);
+        box.label_text = (box.label < 80) ? class_names[box.label] : "unknown";
+        box.flag = true;
+        bbox_collection.push_back(box);
+    }
 
 #ifdef LITETRT_DEBUG
-    std::cout << "NMS plugin model support is under development. Please use standard model without nms=True." << std::endl;
+    std::cout << "Detected " << bbox_collection.size()
+              << " objects from NMS output" << std::endl;
 #endif
 }
 
 void TRTYOLO12::generate_bboxes(const YOLO12ScaleParams &scale_params,
                                 std::vector<types::Boxf> &bbox_collection,
-                                float *output,
-                                float score_threshold, int img_height, int img_width)
+                                float *output, float score_threshold,
+                                int img_height, int img_width)
 {
     // Output format: [1, num_anchors, 84] where 84 = 4(bbox) + 80(classes)
     const unsigned int num_anchors = output_node_dims[0][1];
-    const unsigned int num_classes = output_node_dims[0][2] - 4; // 80
+    const unsigned int num_classes = output_node_dims[0][2] - 4;  // 80
 
     float r_ = scale_params.r;
     int dw_ = scale_params.dw;
@@ -263,8 +331,7 @@ void TRTYOLO12::generate_bboxes(const YOLO12ScaleParams &scale_params,
             }
         }
 
-        if (max_class_score < score_threshold)
-            continue;
+        if (max_class_score < score_threshold) continue;
 
         // Convert center format to corner format and apply scale params
         float x1 = ((cx - w / 2.0f) - dw_) / r_;
@@ -290,8 +357,7 @@ void TRTYOLO12::generate_bboxes(const YOLO12ScaleParams &scale_params,
         bbox_collection.push_back(box);
 
         count += 1;
-        if (count > max_nms)
-            break;
+        if (count > max_nms) break;
     }
 
 #ifdef LITETRT_DEBUG
@@ -300,8 +366,9 @@ void TRTYOLO12::generate_bboxes(const YOLO12ScaleParams &scale_params,
 #endif
 }
 
-void TRTYOLO12::nms(std::vector<types::Boxf> &input, std::vector<types::Boxf> &output,
-                    float iou_threshold, unsigned int topk, unsigned int nms_type)
+void TRTYOLO12::nms(std::vector<types::Boxf> &input,
+                    std::vector<types::Boxf> &output, float iou_threshold,
+                    unsigned int topk, unsigned int nms_type)
 {
     if (nms_type == NMS::BLEND)
     {
