@@ -35,6 +35,8 @@ set(TensorRT_Version ${TensorRT_Version} CACHE STRING "TensorRT version" FORCE)
 
 include_directories(${CUDA_DIR}/include)
 link_directories(${CUDA_DIR}/lib64)
+# Add WSL CUDA library path
+link_directories(/usr/lib/wsl/lib)
 
 include_directories(${TensorRT_DIR}/include)
 link_directories(${TensorRT_DIR}/lib)

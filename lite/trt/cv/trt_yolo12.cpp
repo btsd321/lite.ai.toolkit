@@ -118,12 +118,6 @@ void TRTYOLO12::resize_unscale(const cv::Mat &mat, cv::Mat &mat_rs,
     this->letterbox(mat, mat_rs, target_size, scale_params);
 }
 
-void TRTYOLO12::preprocess(const cv::Mat &input_image, cv::Mat &output_mat)
-{
-    YOLO12ScaleParams scale_params;
-    this->resize_unscale(input_image, output_mat, input_height, input_width, scale_params);
-}
-
 void TRTYOLO12::detect(const cv::Mat &mat, std::vector<types::Boxf> &detected_boxes,
                        float score_threshold, float iou_threshold,
                        unsigned int topk, unsigned int nms_type)
@@ -137,16 +131,25 @@ void TRTYOLO12::detect(const cv::Mat &mat, std::vector<types::Boxf> &detected_bo
     // 1. Preprocess: resize and normalize
     cv::Mat processed_mat;
     YOLO12ScaleParams scale_params;
-    cv::Size target_size(input_width, input_height);
+    int target_height = input_node_dims[2];
+    int target_width = input_node_dims[3];
+    cv::Size target_size(target_width, target_height);
     this->letterbox(mat, processed_mat, target_size, scale_params);
 
-    // 2. Copy to GPU memory
-    auto input_size = processed_mat.total() * processed_mat.elemSize();
-    cudaMemcpyAsync(device_ptrs[0], processed_mat.ptr<float>(), input_size,
-                    cudaMemcpyHostToDevice, stream);
+    // 2. Make input tensor
+    std::vector<float> input;
+    trtcv::utils::transform::create_tensor(processed_mat, input, input_node_dims, trtcv::utils::transform::CHW);
 
-    // 3. Inference
-    if (!context->executeV2(device_ptrs.data()))
+    // 3. Copy to GPU memory
+    cudaMemcpyAsync(buffers[0], input.data(),
+                    input_node_dims[0] * input_node_dims[1] * input_node_dims[2] * input_node_dims[3] * sizeof(float),
+                    cudaMemcpyHostToDevice, stream);
+    cudaStreamSynchronize(stream);
+
+    // 4. Inference
+    bool status = trt_context->enqueueV3(stream);
+    cudaStreamSynchronize(stream);
+    if (!status)
     {
 #ifdef LITETRT_DEBUG
         std::cout << "TensorRT inference failed!" << std::endl;
@@ -154,44 +157,39 @@ void TRTYOLO12::detect(const cv::Mat &mat, std::vector<types::Boxf> &detected_bo
         return;
     }
 
-    // 4. Copy outputs from GPU
-    if (has_nms_plugin)
-    {
-        // 复制所有输出（多个）
-        for (size_t i = 0; i < output_node_sizes.size(); ++i)
-        {
-            auto output_size = output_node_sizes[i] * sizeof(float);
-            cudaMemcpyAsync(host_ptrs[i], device_ptrs[num_inputs + i], output_size,
-                            cudaMemcpyDeviceToHost, stream);
-        }
-    }
-    else
-    {
-        // 复制单个输出
-        auto output_size = output_node_sizes[0] * sizeof(float);
-        cudaMemcpyAsync(host_ptrs[0], device_ptrs[num_inputs], output_size,
-                        cudaMemcpyDeviceToHost, stream);
-    }
     cudaStreamSynchronize(stream);
 
-    // 5. Post-process: generate bboxes
-    std::vector<types::Boxf> bbox_collection;
-    if (!has_nms_plugin)
-    {
-        this->generate_bboxes(scale_params, bbox_collection,
-                              static_cast<float *>(host_ptrs[0]),
-                              score_threshold, img_height, img_width);
-    }
+    // 5. Get output dimensions
+    auto pred_dims = output_node_dims[0];
 
-    // 6. NMS (or direct output for NMS models)
+    // 6. Copy outputs from GPU
     if (has_nms_plugin)
     {
-        // 模型已包含NMS，直接处理输出
+        // NMS模型有多个输出
+        // 这里需要根据实际NMS插件的输出格式处理
+        // 暂时使用标准输出处理
+        std::vector<float> output(pred_dims[0] * pred_dims[1] * pred_dims[2]);
+        cudaMemcpyAsync(output.data(), buffers[1], pred_dims[0] * pred_dims[1] * pred_dims[2] * sizeof(float),
+                        cudaMemcpyDeviceToHost, stream);
+        cudaStreamSynchronize(stream);
+
+        // 生成检测框（NMS版本）
         this->generate_bboxes_with_nms(scale_params, detected_boxes, score_threshold, img_height, img_width);
     }
     else
     {
-        // 标准模型，需要手动NMS
+        // 标准模型处理
+        std::vector<float> output(pred_dims[0] * pred_dims[1] * pred_dims[2]);
+        cudaMemcpyAsync(output.data(), buffers[1], pred_dims[0] * pred_dims[1] * pred_dims[2] * sizeof(float),
+                        cudaMemcpyDeviceToHost, stream);
+        cudaStreamSynchronize(stream);
+
+        // 生成检测框
+        std::vector<types::Boxf> bbox_collection;
+        this->generate_bboxes(scale_params, bbox_collection, output.data(),
+                              score_threshold, img_height, img_width);
+
+        // NMS
         this->nms(bbox_collection, detected_boxes, iou_threshold, topk, nms_type);
     }
 }
@@ -214,71 +212,15 @@ void TRTYOLO12::generate_bboxes_with_nms(const YOLO12ScaleParams &scale_params,
 #ifdef LITETRT_DEBUG
         std::cout << "Warning: Expected 4 outputs for NMS model, got " << output_node_dims.size() << std::endl;
 #endif
+        // TODO: 当前版本暂不支持NMS插件，回退到标准处理
         return;
     }
 
-    float r_ = scale_params.r;
-    int dw_ = scale_params.dw;
-    int dh_ = scale_params.dh;
-
-    // 获取有效检测数量
-    float *num_dets_ptr = static_cast<float *>(host_ptrs[0]);
-    int num_valid_dets = static_cast<int>(num_dets_ptr[0]);
-
-    // 获取输出指针
-    float *boxes_ptr = static_cast<float *>(host_ptrs[1]);   // [batch, max_det, 4]
-    float *scores_ptr = static_cast<float *>(host_ptrs[2]);  // [batch, max_det]
-    float *classes_ptr = static_cast<float *>(host_ptrs[3]); // [batch, max_det]
-
-    const int max_det = output_node_dims[1][1];
-    num_valid_dets = std::min(num_valid_dets, max_det);
+    // TODO: 实现NMS插件输出的解析
+    // 当前版本需要用户使用标准模型（不带nms=True）
 
 #ifdef LITETRT_DEBUG
-    std::cout << "NMS model detected " << num_valid_dets << " boxes" << std::endl;
-#endif
-
-    for (int i = 0; i < num_valid_dets; ++i)
-    {
-        float score = scores_ptr[i];
-        if (score < score_threshold)
-            continue;
-
-        // 获取框坐标 (x1, y1, x2, y2)
-        float x1 = boxes_ptr[i * 4 + 0];
-        float y1 = boxes_ptr[i * 4 + 1];
-        float x2 = boxes_ptr[i * 4 + 2];
-        float y2 = boxes_ptr[i * 4 + 3];
-
-        // 反向缩放到原图尺寸
-        x1 = (x1 - dw_) / r_;
-        y1 = (y1 - dh_) / r_;
-        x2 = (x2 - dw_) / r_;
-        y2 = (y2 - dh_) / r_;
-
-        // 限制在图像边界内
-        x1 = std::max(std::min(x1, (float)img_width - 1.0f), 0.0f);
-        y1 = std::max(std::min(y1, (float)img_height - 1.0f), 0.0f);
-        x2 = std::max(std::min(x2, (float)img_width - 1.0f), 0.0f);
-        y2 = std::max(std::min(y2, (float)img_height - 1.0f), 0.0f);
-
-        int class_id = static_cast<int>(classes_ptr[i]);
-        if (class_id >= 80)
-            class_id = 0; // 防止越界
-
-        types::Boxf box;
-        box.x1 = x1;
-        box.y1 = y1;
-        box.x2 = x2;
-        box.y2 = y2;
-        box.score = score;
-        box.label = class_id;
-        box.label_text = class_names[class_id];
-        box.flag = true;
-        bbox_collection.push_back(box);
-    }
-
-#ifdef LITETRT_DEBUG
-    std::cout << "Final boxes after score filtering: " << bbox_collection.size() << std::endl;
+    std::cout << "NMS plugin model support is under development. Please use standard model without nms=True." << std::endl;
 #endif
 }
 
