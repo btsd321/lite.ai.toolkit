@@ -8,6 +8,47 @@
 
 using trtcv::TRTYOLO12;
 
+void TRTYOLO12::auto_detect_nms_plugin()
+{
+    // 检测模型是否包含NMS插件
+    // 通常自带NMS的模型会有多个输出：num_dets, det_boxes, det_scores, det_classes
+    // 而标准模型只有一个输出
+    if (output_node_dims.size() >= 3)
+    {
+        // 检查输出的形状特征
+        bool likely_nms = false;
+        for (const auto &dims : output_node_dims)
+        {
+            // NMS输出通常包含固定数量的检测框（如100）
+            if (dims.size() >= 2 && (dims[1] == 100 || dims[1] == 300 || dims[1] == 1000))
+            {
+                likely_nms = true;
+                break;
+            }
+        }
+        has_nms_plugin = likely_nms;
+    }
+
+#ifdef LITETRT_DEBUG
+    std::cout << "YOLO12 NMS plugin detected: " << (has_nms_plugin ? "Yes" : "No") << std::endl;
+    if (has_nms_plugin)
+    {
+        std::cout << "Model has " << output_node_dims.size() << " outputs" << std::endl;
+        for (size_t i = 0; i < output_node_dims.size(); ++i)
+        {
+            std::cout << "Output " << i << " shape: [";
+            for (size_t j = 0; j < output_node_dims[i].size(); ++j)
+            {
+                std::cout << output_node_dims[i][j];
+                if (j < output_node_dims[i].size() - 1)
+                    std::cout << ", ";
+            }
+            std::cout << "]" << std::endl;
+        }
+    }
+#endif
+}
+
 void TRTYOLO12::letterbox(const cv::Mat &image, cv::Mat &out, cv::Size &size, YOLO12ScaleParams &scale_params)
 {
     const float inp_h = size.height;
@@ -113,20 +154,132 @@ void TRTYOLO12::detect(const cv::Mat &mat, std::vector<types::Boxf> &detected_bo
         return;
     }
 
-    // 4. Copy output from GPU
-    auto output_size = output_node_sizes[0] * sizeof(float);
-    cudaMemcpyAsync(host_ptrs[0], device_ptrs[num_inputs], output_size,
-                    cudaMemcpyDeviceToHost, stream);
+    // 4. Copy outputs from GPU
+    if (has_nms_plugin)
+    {
+        // 复制所有输出（多个）
+        for (size_t i = 0; i < output_node_sizes.size(); ++i)
+        {
+            auto output_size = output_node_sizes[i] * sizeof(float);
+            cudaMemcpyAsync(host_ptrs[i], device_ptrs[num_inputs + i], output_size,
+                            cudaMemcpyDeviceToHost, stream);
+        }
+    }
+    else
+    {
+        // 复制单个输出
+        auto output_size = output_node_sizes[0] * sizeof(float);
+        cudaMemcpyAsync(host_ptrs[0], device_ptrs[num_inputs], output_size,
+                        cudaMemcpyDeviceToHost, stream);
+    }
     cudaStreamSynchronize(stream);
 
     // 5. Post-process: generate bboxes
     std::vector<types::Boxf> bbox_collection;
-    this->generate_bboxes(scale_params, bbox_collection,
-                          static_cast<float *>(host_ptrs[0]),
-                          score_threshold, img_height, img_width);
+    if (!has_nms_plugin)
+    {
+        this->generate_bboxes(scale_params, bbox_collection,
+                              static_cast<float *>(host_ptrs[0]),
+                              score_threshold, img_height, img_width);
+    }
 
-    // 6. NMS
-    this->nms(bbox_collection, detected_boxes, iou_threshold, topk, nms_type);
+    // 6. NMS (or direct output for NMS models)
+    if (has_nms_plugin)
+    {
+        // 模型已包含NMS，直接处理输出
+        this->generate_bboxes_with_nms(scale_params, detected_boxes, score_threshold, img_height, img_width);
+    }
+    else
+    {
+        // 标准模型，需要手动NMS
+        this->nms(bbox_collection, detected_boxes, iou_threshold, topk, nms_type);
+    }
+}
+
+void TRTYOLO12::generate_bboxes_with_nms(const YOLO12ScaleParams &scale_params,
+                                         std::vector<types::Boxf> &bbox_collection,
+                                         float score_threshold, int img_height, int img_width)
+{
+    // 处理包含NMS插件的模型输出
+    // 典型的输出格式：
+    // output[0]: num_dets [batch]
+    // output[1]: det_boxes [batch, max_det, 4]
+    // output[2]: det_scores [batch, max_det]
+    // output[3]: det_classes [batch, max_det]
+
+    bbox_collection.clear();
+
+    if (output_node_dims.size() < 4)
+    {
+#ifdef LITETRT_DEBUG
+        std::cout << "Warning: Expected 4 outputs for NMS model, got " << output_node_dims.size() << std::endl;
+#endif
+        return;
+    }
+
+    float r_ = scale_params.r;
+    int dw_ = scale_params.dw;
+    int dh_ = scale_params.dh;
+
+    // 获取有效检测数量
+    float *num_dets_ptr = static_cast<float *>(host_ptrs[0]);
+    int num_valid_dets = static_cast<int>(num_dets_ptr[0]);
+
+    // 获取输出指针
+    float *boxes_ptr = static_cast<float *>(host_ptrs[1]);   // [batch, max_det, 4]
+    float *scores_ptr = static_cast<float *>(host_ptrs[2]);  // [batch, max_det]
+    float *classes_ptr = static_cast<float *>(host_ptrs[3]); // [batch, max_det]
+
+    const int max_det = output_node_dims[1][1];
+    num_valid_dets = std::min(num_valid_dets, max_det);
+
+#ifdef LITETRT_DEBUG
+    std::cout << "NMS model detected " << num_valid_dets << " boxes" << std::endl;
+#endif
+
+    for (int i = 0; i < num_valid_dets; ++i)
+    {
+        float score = scores_ptr[i];
+        if (score < score_threshold)
+            continue;
+
+        // 获取框坐标 (x1, y1, x2, y2)
+        float x1 = boxes_ptr[i * 4 + 0];
+        float y1 = boxes_ptr[i * 4 + 1];
+        float x2 = boxes_ptr[i * 4 + 2];
+        float y2 = boxes_ptr[i * 4 + 3];
+
+        // 反向缩放到原图尺寸
+        x1 = (x1 - dw_) / r_;
+        y1 = (y1 - dh_) / r_;
+        x2 = (x2 - dw_) / r_;
+        y2 = (y2 - dh_) / r_;
+
+        // 限制在图像边界内
+        x1 = std::max(std::min(x1, (float)img_width - 1.0f), 0.0f);
+        y1 = std::max(std::min(y1, (float)img_height - 1.0f), 0.0f);
+        x2 = std::max(std::min(x2, (float)img_width - 1.0f), 0.0f);
+        y2 = std::max(std::min(y2, (float)img_height - 1.0f), 0.0f);
+
+        int class_id = static_cast<int>(classes_ptr[i]);
+        if (class_id >= 80)
+            class_id = 0; // 防止越界
+
+        types::Boxf box;
+        box.x1 = x1;
+        box.y1 = y1;
+        box.x2 = x2;
+        box.y2 = y2;
+        box.score = score;
+        box.label = class_id;
+        box.label_text = class_names[class_id];
+        box.flag = true;
+        bbox_collection.push_back(box);
+    }
+
+#ifdef LITETRT_DEBUG
+    std::cout << "Final boxes after score filtering: " << bbox_collection.size() << std::endl;
+#endif
 }
 
 void TRTYOLO12::generate_bboxes(const YOLO12ScaleParams &scale_params,

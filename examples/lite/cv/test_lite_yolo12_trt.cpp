@@ -153,6 +153,34 @@ static void test_tensorrt()
 #endif
 }
 
+static void test_tensorrt_with_nms()
+{
+#ifdef ENABLE_TENSORRT
+    std::string engine_path = "../../../examples/hub/trt/yolo12n_nms.engine"; // 包含NMS的模型
+    std::string test_img_path = "../../../examples/lite/resources/test_lite_yolov5_1.jpg";
+    std::string save_img_path = "../../../examples/logs/test_trt_yolo12_nms_1.jpg";
+
+    // Test TensorRT Engine with NMS
+    lite::trt::cv::detection::YOLO12 *yolo12 =
+        new lite::trt::cv::detection::YOLO12(engine_path);
+
+    std::vector<lite::types::Boxf> detected_boxes;
+    cv::Mat img_bgr = cv::imread(test_img_path);
+
+    // 注意：对于包含NMS的模型，iou_threshold 和 nms_type 参数将被忽略
+    // 因为NMS已经在模型内部完成
+    yolo12->detect(img_bgr, detected_boxes, 0.25f); // 只需要置信度阈值
+
+    lite::utils::draw_boxes_inplace(img_bgr, detected_boxes);
+
+    cv::imwrite(save_img_path, img_bgr);
+
+    std::cout << "TensorRT with NMS Version Detected Boxes Num: " << detected_boxes.size() << std::endl;
+
+    delete yolo12;
+#endif
+}
+
 static void test_lite()
 {
     test_default();
@@ -161,6 +189,7 @@ static void test_lite()
     test_ncnn();
     test_tnn();
     test_tensorrt();
+    test_tensorrt_with_nms(); // 测试带NMS的TensorRT模型
 }
 
 int main(__unused int argc, __unused char *argv[])

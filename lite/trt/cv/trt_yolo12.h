@@ -15,7 +15,10 @@ namespace trtcv
     class LITE_EXPORTS TRTYOLO12 : public BasicTRTHandler
     {
     public:
-        explicit TRTYOLO12(const std::string &_trt_model_path, unsigned int _num_threads = 1) : BasicTRTHandler(_trt_model_path, _num_threads) {};
+        explicit TRTYOLO12(const std::string &_trt_model_path, unsigned int _num_threads = 1) : BasicTRTHandler(_trt_model_path, _num_threads)
+        {
+            auto_detect_nms_plugin();
+        };
 
         ~TRTYOLO12() override = default;
 
@@ -71,6 +74,15 @@ namespace trtcv
 
         void nms(std::vector<types::Boxf> &input, std::vector<types::Boxf> &output,
                  float iou_threshold, unsigned int topk, unsigned int nms_type);
+
+    private:
+        bool has_nms_plugin = false;   // 标记模型是否包含NMS插件
+        void auto_detect_nms_plugin(); // 自动检测模型是否包含NMS
+
+        void generate_bboxes_with_nms(const YOLO12ScaleParams &scale_params,
+                                      std::vector<types::Boxf> &bbox_collection,
+                                      float score_threshold, int img_height,
+                                      int img_width); // 处理包含NMS的模型输出
 
     public:
         void detect(const cv::Mat &mat, std::vector<types::Boxf> &detected_boxes,

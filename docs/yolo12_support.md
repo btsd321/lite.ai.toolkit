@@ -36,6 +36,14 @@ model.export(format='onnx', opset=11, simplify=True, dynamic=False, imgsz=640)
 # 转换为 TensorRT Engine (推荐用于 GPU 部署)
 trtexec --onnx=yolo12n.onnx --saveEngine=yolo12n.engine --fp16
 
+# 使用 Ultralytics 直接导出 TensorRT Engine
+from ultralytics import YOLO
+model = YOLO('yolo12n.pt')
+# 标准模型（需要手动NMS）
+model.export(format='engine', device=0)
+# 包含NMS的端到端模型（推荐，性能更高）
+model.export(format='engine', device=0, nms=True)
+
 # 转换为 MNN
 ./MNNConvert -f ONNX --modelFile yolo12n.onnx --MNNModel yolo12n.mnn --bizCode MNN
 
@@ -88,9 +96,21 @@ delete yolo12;
 ### 参数说明
 
 - `score_threshold`: 置信度阈值，默认 0.25
-- `iou_threshold`: NMS IoU 阈值，默认 0.45  
-- `topk`: 最大检测框数量，默认 100
-- `nms_type`: NMS 类型，支持 HARD/BLEND/OFFSET，默认 OFFSET
+- `iou_threshold`: NMS IoU 阈值，默认 0.45（对于包含NMS的模型此参数被忽略）
+- `topk`: 最大检测框数量，默认 100（对于包含NMS的模型此参数被忽略）
+- `nms_type`: NMS 类型，支持 HARD/BLEND/OFFSET，默认 OFFSET（对于包含NMS的模型此参数被忽略）
+
+### TensorRT 端到端模型说明
+
+**自动检测机制**：
+- 框架会自动检测TensorRT模型是否包含内置NMS
+- 包含NMS的模型通常有4个输出：`num_dets`, `det_boxes`, `det_scores`, `det_classes`
+- 标准模型只有1个输出：原始预测结果
+
+**使用建议**：
+- 推荐使用包含NMS的TensorRT模型（`nms=True`）以获得最佳性能
+- 包含NMS的模型无需手动设置`iou_threshold`、`topk`、`nms_type`参数
+- 两种模型的API接口完全相同，可无缝切换
 
 ## 性能特点
 
@@ -146,6 +166,7 @@ make install
 4. ONNXRuntime 后端提供最佳兼容性
 5. 模型文件路径需要正确设置
 6. TensorRT Engine 文件与 GPU 架构相关，需要在目标设备上生成
+7. **TensorRT NMS模型**: 框架自动检测是否包含NMS，无需手动配置
 
 ## 故障排除
 
