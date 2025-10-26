@@ -2,7 +2,7 @@
 #define LITE_AI_CONFIG_H
 
 #define ENABLE_ONNXRUNTIME
-/* #undef ENABLE_TENSORRT */
+#define ENABLE_TENSORRT
 /* #undef ENABLE_MNN */
 /* #undef ENABLE_NCNN */
 /* #undef ENABLE_TNN */

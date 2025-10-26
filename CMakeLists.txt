@@ -61,6 +61,13 @@ include(cmake/opencv.cmake)
 
 add_lite_ai_toolkit_shared_library(${VERSION_STRING} ${SOVERSION_STRING})
 install(TARGETS lite.ai.toolkit LIBRARY DESTINATION lib)
+
+if(EXISTS ${CMAKE_SOURCE_DIR}/lite/bin/libddim_scheduler_cpp.so)
+  install(FILES ${CMAKE_SOURCE_DIR}/lite/bin/libddim_scheduler_cpp.so 
+          DESTINATION lib)
+  message(STATUS "Will install libddim_scheduler_cpp.so to ${CMAKE_INSTALL_PREFIX}/lib")
+endif()
+
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lite 
         DESTINATION ${CMAKE_INSTALL_PREFIX}/include
         FILES_MATCHING
