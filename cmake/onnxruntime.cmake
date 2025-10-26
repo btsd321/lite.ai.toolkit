@@ -31,12 +31,6 @@ file(GLOB ONNXRUNTIME_ASR_HEAD ${CMAKE_SOURCE_DIR}/lite/ort/asr/*.h)
 file(GLOB ONNXRUNTIME_SD_HEAD ${CMAKE_SOURCE_DIR}/lite/ort/sd/*.h)
 
 set(ORT_SRCS ${ONNXRUNTIME_CV_SRCS} ${ONNXRUNTIME_NLP_SRCS} ${ONNXRUNTIME_ASR_SRCS} ${ONNXRUNTIME_CORE_SRCS} ${ONNXRUNTIME_SD_SRCS})
-# 3. copy
-message("[Lite.AI.Toolkit][I] Installing Lite.AI.ToolKit Headers for ONNXRuntime Backend ...")
-# "INSTALL" can copy all files from the list to the specified path.
-# "COPY" only copies one file to a specified path
-file(INSTALL ${ONNXRUNTIME_CORE_HEAD} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/ort/core)
-file(INSTALL ${ONNXRUNTIME_CV_HEAD} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/ort/cv)
-file(INSTALL ${ONNXRUNTIME_ASR_HEAD} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/ort/asr)
-file(INSTALL ${ONNXRUNTIME_NLP_HEAD} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/ort/nlp)
-file(INSTALL ${ONNXRUNTIME_SD_HEAD} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/ort/sd)
+# 3. prepare install (headers will be installed at 'make install' stage, not configure stage)
+message("[Lite.AI.Toolkit][I] Preparing Lite.AI.ToolKit Headers for ONNXRuntime Backend ...")
+set(ORT_HEADERS ${ONNXRUNTIME_CORE_HEAD} ${ONNXRUNTIME_CV_HEAD} ${ONNXRUNTIME_ASR_HEAD} ${ONNXRUNTIME_NLP_HEAD} ${ONNXRUNTIME_SD_HEAD})

@@ -67,14 +67,6 @@ set_source_files_properties(${TENSORRT_CUDA_KERNEL_SRCS_CU} ${TENSORRT_CUDA_KERN
         ${TENSORRT_CUDA_KERNEL_HEAD_CPP} ${TENSORRT_CUDA_KERNEL_HEAD_CU}
         PROPERTIES LANGUAGE CUDA)
 
-# 3. copy
-message("[Lite.AI.Toolkit][I] Installing Lite.AI.ToolKit Headers for TensorRT Backend ...")
-# "INSTALL" can copy all files from the list to the specified path.
-# "COPY" only copies one file to a specified path
-file(INSTALL ${TENSORRT_CORE_HEAD} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/trt/core)
-file(INSTALL ${TENSORRT_CV_HEAD} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/trt/cv)
-file(INSTALL ${TENSORRT_ASR_HEAD} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/trt/asr)
-file(INSTALL ${TENSORRT_NLP_HEAD} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/trt/nlp)
-file(INSTALL ${TENSORRT_SD_HEAD} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/trt/sd)
-file(INSTALL ${TENSORRT_CUDA_KERNEL_HEAD_CPP} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/trt/kernel)
-file(INSTALL ${TENSORRT_CUDA_KERNEL_HEAD_CU} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/lite/trt/kernel)
+# 3. prepare install (headers will be installed at 'make install' stage, not configure stage)
+message("[Lite.AI.Toolkit][I] Preparing Lite.AI.ToolKit Headers for TensorRT Backend ...")
+set(TRT_HEADERS ${TENSORRT_CORE_HEAD} ${TENSORRT_CV_HEAD} ${TENSORRT_ASR_HEAD} ${TENSORRT_NLP_HEAD} ${TENSORRT_SD_HEAD} ${TENSORRT_CUDA_KERNEL_HEAD_CPP} ${TENSORRT_CUDA_KERNEL_HEAD_CU})

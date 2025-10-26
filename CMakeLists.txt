@@ -49,7 +49,7 @@ if ((NOT ENABLE_ONNXRUNTIME) AND ENABLE_TEST)
 endif()
 
 include_directories(${LITE_AI_ROOT_DIR})
-configure_file(cmake/lite.ai.toolkit.cmake.in ${CMAKE_SOURCE_DIR}/cmake/lite.ai.toolkit.cmake @ONLY)
+configure_file(cmake/lite.ai.toolkit.cmake.in ${CMAKE_BINARY_DIR}/lite.ai.toolkit.cmake @ONLY)
 
 include(cmake/opencv.cmake)
 
@@ -60,7 +60,7 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/lite
         FILES_MATCHING
         PATTERN "*.h")
 install(DIRECTORY ${THIRD_PARTY_PATH} DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(FILES ${CMAKE_SOURCE_DIR}/cmake/lite.ai.toolkit.cmake 
+install(FILES ${CMAKE_BINARY_DIR}/lite.ai.toolkit.cmake 
         DESTINATION ${CMAKE_INSTALL_PREFIX})
 install(FILES ${CMAKE_SOURCE_DIR}/cmake/lite.ai.toolkit-config.cmake 
         DESTINATION ${CMAKE_INSTALL_PREFIX})
