@@ -4,6 +4,12 @@ project(lite.ai.toolkit)
 set(CMAKE_CXX_STANDARD 17)
 set(VERSION_STRING 0.3.1)
 set(SOVERSION_STRING 0.3.1)
+
+# Set default install prefix
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "/usr/local/lite.ai.toolkit" CACHE PATH "Default install prefix" FORCE)
+endif()
+
 include(cmake/utils.cmake)
 
 if (NOT (UNIX AND NOT APPLE))
@@ -64,6 +70,17 @@ install(FILES ${CMAKE_BINARY_DIR}/lite.ai.toolkit.cmake
         DESTINATION ${CMAKE_INSTALL_PREFIX})
 install(FILES ${CMAKE_SOURCE_DIR}/cmake/lite.ai.toolkit-config.cmake 
         DESTINATION ${CMAKE_INSTALL_PREFIX})
+
+# Add uninstall target
+if(NOT TARGET uninstall)
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+    IMMEDIATE @ONLY)
+
+  add_custom_target(uninstall
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+endif()
 
 if (ENABLE_TEST)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_INSTALL_PREFIX}/bin)
