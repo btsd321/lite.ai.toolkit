@@ -16,3 +16,5 @@ TestExamples
 
 ultralytics
 YOLOv8-TensorRT
+
+.vscode/
