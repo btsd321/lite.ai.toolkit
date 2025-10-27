@@ -38,12 +38,16 @@ add_definitions(-DSOURCE_PATH="${CMAKE_SOURCE_DIR}")
 option(ENABLE_TEST "build test examples." OFF)
 option(ENABLE_DEBUG_STRING "enable DEBUG string or not" ON)
 option(ENABLE_ONNXRUNTIME "enable ONNXRuntime engine" ON)
-option(ENABLE_TENSORRT "enable TensorRT engine" OFF)
+option(ENABLE_TENSORRT "enable TensorRT engine" ON)
 option(ENABLE_MNN "enable MNN engine" OFF)
 option(ENABLE_NCNN "enable NCNN engine" OFF) 
 option(ENABLE_TNN "enable TNN engine" OFF)
 option(ENABLE_ONNXRUNTIME_CUDA "enable ONNXRuntime engine with CUDA provider" OFF) # for future use
 option(ENABLE_OPENCV_VIDEOIO "enable opencv videoio modules for detect_video apis" ON) # now, ON only
+
+# Set TensorRT and CUDA paths
+set(TensorRT_DIR "/usr" CACHE PATH "TensorRT installation directory")
+set(CUDA_DIR "/usr/local/cuda" CACHE PATH "CUDA installation directory")
 
 if ((NOT ENABLE_ONNXRUNTIME) AND (NOT ENABLE_MNN))
     message(FATAL_ERROR "One of ONNXRuntime/MNN Backend must be enable!")
