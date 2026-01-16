@@ -5,14 +5,14 @@ if(NOT CUDA_DIR)
   set(CUDA_DIR "/usr/local/cuda")
   message(STATUS "CUDA_DIR is not defined, use default dir: ${CUDA_DIR}")
 else()
-  message(STATUS "custom CUDA_DIR is defined as: ${CUDA_DIR}") 
+  message(STATUS "custom CUDA_DIR is defined as: ${CUDA_DIR}")
 endif()
 
 if(NOT TensorRT_DIR)
   set(TensorRT_DIR "/usr/local/tensorrt")
   message(STATUS "TensorRT_DIR is not defined, use default dir: ${TensorRT_DIR}")
 else()
-  message(STATUS "custom TensorRT_DIR is defined as: ${TensorRT_DIR}") 
+  message(STATUS "custom TensorRT_DIR is defined as: ${TensorRT_DIR}")
 endif()
 
 # TODO: download tensorrt need user operation if trt doesn't exist
@@ -24,20 +24,41 @@ if(NOT EXISTS ${TensorRT_DIR})
     message(FATAL_ERROR "[Lite.AI.Toolkit][E] ${TensorRT_DIR} is not exists! Please define -DTensorRT_DIR=xxx while TensorRT Backend is enabled.")
 endif()
 
-execute_process(COMMAND sh -c "nm -D libnvinfer.so | grep tensorrt_version" 
-                WORKING_DIRECTORY ${TensorRT_DIR}/lib
+# 检测 TensorRT 库路径（支持系统安装和自定义安装）
+if(EXISTS ${TensorRT_DIR}/lib/libnvinfer.so)
+    set(TensorRT_LIB_DIR ${TensorRT_DIR}/lib)
+    set(TensorRT_INCLUDE_DIR ${TensorRT_DIR}/include)
+elseif(EXISTS ${TensorRT_DIR}/lib/x86_64-linux-gnu/libnvinfer.so)
+    set(TensorRT_LIB_DIR ${TensorRT_DIR}/lib/x86_64-linux-gnu)
+    set(TensorRT_INCLUDE_DIR ${TensorRT_DIR}/include/x86_64-linux-gnu)
+else()
+    message(FATAL_ERROR "[Lite.AI.Toolkit][E] Cannot find libnvinfer.so in ${TensorRT_DIR}/lib or ${TensorRT_DIR}/lib/x86_64-linux-gnu")
+endif()
+
+execute_process(COMMAND sh -c "nm -D libnvinfer.so | grep tensorrt_version"
+                WORKING_DIRECTORY ${TensorRT_LIB_DIR}
                 RESULT_VARIABLE result
                 OUTPUT_VARIABLE curr_out
                 ERROR_VARIABLE  curr_out)
 
-string(STRIP ${curr_out} TensorRT_Version)
+if(curr_out)
+    string(STRIP ${curr_out} TensorRT_Version)
+else()
+    set(TensorRT_Version "Unknown")
+endif()
 set(TensorRT_Version ${TensorRT_Version} CACHE STRING "TensorRT version" FORCE)
 
 include_directories(${CUDA_DIR}/include)
 link_directories(${CUDA_DIR}/lib64)
+# 添加 CUDA 驱动库路径（WSL 环境）
+if(EXISTS /usr/lib/wsl/lib)
+    link_directories(/usr/lib/wsl/lib)
+endif()
+# 添加 CUDA stubs 路径（开发环境）
+link_directories(${CUDA_DIR}/targets/x86_64-linux/lib/stubs)
 
-include_directories(${TensorRT_DIR}/include)
-link_directories(${TensorRT_DIR}/lib)
+include_directories(${TensorRT_INCLUDE_DIR})
+link_directories(${TensorRT_LIB_DIR})
 
 # 1. glob sources files
 file(GLOB TENSORRT_CORE_SRCS ${CMAKE_SOURCE_DIR}/lite/trt/core/*.cpp)
