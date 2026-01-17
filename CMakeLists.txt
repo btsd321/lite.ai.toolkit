@@ -34,7 +34,7 @@ option(ENABLE_DEBUG_STRING "enable DEBUG string or not" ON)
 option(ENABLE_ONNXRUNTIME "enable ONNXRuntime engine" ON)
 option(ENABLE_TENSORRT "enable TensorRT engine" OFF)
 option(ENABLE_MNN "enable MNN engine" OFF)
-option(ENABLE_NCNN "enable NCNN engine" OFF) 
+option(ENABLE_NCNN "enable NCNN engine" OFF)
 option(ENABLE_TNN "enable TNN engine" OFF)
 option(ENABLE_ONNXRUNTIME_CUDA "enable ONNXRuntime engine with CUDA provider" OFF) # for future use
 option(ENABLE_OPENCV_VIDEOIO "enable opencv videoio modules for detect_video apis" ON) # now, ON only
@@ -55,15 +55,24 @@ include(cmake/opencv.cmake)
 
 add_lite_ai_toolkit_shared_library(${VERSION_STRING} ${SOVERSION_STRING})
 install(TARGETS lite.ai.toolkit LIBRARY DESTINATION lib)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/lite 
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lite
         DESTINATION ${CMAKE_INSTALL_PREFIX}/include
         FILES_MATCHING
         PATTERN "*.h")
 install(DIRECTORY ${THIRD_PARTY_PATH} DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(FILES ${CMAKE_SOURCE_DIR}/cmake/lite.ai.toolkit.cmake 
+install(FILES ${CMAKE_SOURCE_DIR}/cmake/lite.ai.toolkit.cmake
         DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(FILES ${CMAKE_SOURCE_DIR}/cmake/lite.ai.toolkit-config.cmake 
+install(FILES ${CMAKE_SOURCE_DIR}/cmake/lite.ai.toolkit-config.cmake
         DESTINATION ${CMAKE_INSTALL_PREFIX})
+
+# 添加 uninstall target
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+    IMMEDIATE @ONLY)
+
+add_custom_target(uninstall
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 
 if (ENABLE_TEST)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_INSTALL_PREFIX}/bin)
