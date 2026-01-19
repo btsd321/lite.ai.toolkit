@@ -137,6 +137,7 @@
 #include "lite/trt/cv/trt_yolov5.h"
 #include "lite/trt/cv/trt_yolox.h"
 #include "lite/trt/cv/trt_yolov8.h"
+#include "lite/trt/cv/trt_yolov8_obb.h"
 #include "lite/trt/cv/trt_yolov6.h"
 #include "lite/trt/cv/trt_yolo12.h"
 #include "lite/trt/cv/trt_modnet.h"

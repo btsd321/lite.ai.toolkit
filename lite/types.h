@@ -7,266 +7,272 @@
 
 #include "lite.ai.headers.h"
 
-namespace lite {
-  namespace types
-  {
-    template<typename _T1 = float, typename _T2 = float>
-    static inline void __assert_type()
+namespace lite
+{
+    namespace types
     {
-      static_assert(std::is_pod<_T1>::value && std::is_pod<_T2>::value
-                    && std::is_floating_point<_T2>::value
-                    && (std::is_integral<_T1>::value || std::is_floating_point<_T1>::value),
-                    "not support type.");
-    } // only support for some specific types. check at compile-time.
-  }
+        template <typename _T1 = float, typename _T2 = float>
+        static inline void __assert_type()
+        {
+            static_assert(std::is_pod<_T1>::value && std::is_pod<_T2>::value && std::is_floating_point<_T2>::value && (std::is_integral<_T1>::value || std::is_floating_point<_T1>::value),
+                          "not support type.");
+        } // only support for some specific types. check at compile-time.
+    }
 
-  namespace types
-  {
-    // bounding box.
-    template<typename T1 = float, typename T2 = float>
-    struct BoundingBoxType
+    namespace types
     {
-      typedef T1 value_type;
-      typedef T2 score_type;
-      value_type x1;
-      value_type y1;
-      value_type x2;
-      value_type y2;
-      score_type score;
-      const char *label_text;
-      unsigned int label; // for general object detection.
-      bool flag; // future use.
-      // convert type.
-      template<typename O1, typename O2 = score_type>
-      BoundingBoxType<O1, O2> convert_type() const;
+        // bounding box.
+        template <typename T1 = float, typename T2 = float>
+        struct BoundingBoxType
+        {
+            typedef T1 value_type;
+            typedef T2 score_type;
+            value_type x1;
+            value_type y1;
+            value_type x2;
+            value_type y2;
+            score_type score;
+            const char *label_text;
+            unsigned int label; // for general object detection.
+            bool flag;          // future use.
+            // convert type.
+            template <typename O1, typename O2 = score_type>
+            BoundingBoxType<O1, O2> convert_type() const;
 
-      template<typename O1, typename O2 = score_type>
-      value_type iou_of(const BoundingBoxType<O1, O2> &other) const;
+            template <typename O1, typename O2 = score_type>
+            value_type iou_of(const BoundingBoxType<O1, O2> &other) const;
 
-      value_type width() const;
+            value_type width() const;
 
-      value_type height() const;
+            value_type height() const;
 
-      value_type area() const;
+            value_type area() const;
 
-      ::cv::Rect rect() const;
+            ::cv::Rect rect() const;
 
-      ::cv::Point2i tl() const;
+            ::cv::Point2i tl() const;
 
-      ::cv::Point2i rb() const;
+            ::cv::Point2i rb() const;
 
-      BoundingBoxType() :
-          x1(static_cast<value_type>(0)), y1(static_cast<value_type>(0)),
-          x2(static_cast<value_type>(0)), y2(static_cast<value_type>(0)),
-          score(static_cast<score_type>(0)), label_text(nullptr), label(0),
-          flag(false)
-      { types::__assert_type<value_type, score_type>(); }
-    }; // End BoundingBox.
+            BoundingBoxType() : x1(static_cast<value_type>(0)), y1(static_cast<value_type>(0)),
+                                x2(static_cast<value_type>(0)), y2(static_cast<value_type>(0)),
+                                score(static_cast<score_type>(0)), label_text(nullptr), label(0),
+                                flag(false)
+            {
+                types::__assert_type<value_type, score_type>();
+            }
+        }; // End BoundingBox.
 
+        // specific alias.
+        template class LITE_EXPORTS BoundingBoxType<int, float>;
+        template class LITE_EXPORTS BoundingBoxType<float, float>;
+        template class LITE_EXPORTS BoundingBoxType<double, double>;
 
-      // specific alias.
-    template class LITE_EXPORTS BoundingBoxType<int, float>;
-    template class LITE_EXPORTS BoundingBoxType<float, float>;
-    template class LITE_EXPORTS BoundingBoxType<double, double>;
+        typedef BoundingBoxType<int, float> Boxi;
+        typedef BoundingBoxType<float, float> Boxf;
+        typedef BoundingBoxType<double, double> Boxd;
 
-    typedef BoundingBoxType<int, float> Boxi;
-    typedef BoundingBoxType<float, float> Boxf;
-    typedef BoundingBoxType<double, double> Boxd;
+        typedef struct LITE_EXPORTS LandmarksType
+        {
+            std::vector<cv::Point2f> points; // x,y
+            bool flag;
 
-    typedef struct LITE_EXPORTS LandmarksType
-    {
-      std::vector<cv::Point2f> points; // x,y
-      bool flag;
+            LandmarksType() : flag(false) {};
+        } Landmarks;
 
-      LandmarksType() : flag(false)
-      {};
-    } Landmarks;
+        // 2D & 3D Landmarks
+        typedef Landmarks Landmarks2D;
 
-    // 2D & 3D Landmarks
-    typedef Landmarks Landmarks2D;
+        typedef struct LITE_EXPORTS Landmarks3DType
+        {
+            std::vector<cv::Point3f> points; // x,y,z
+            bool flag;
 
-    typedef struct LITE_EXPORTS Landmarks3DType
-    {
-      std::vector<cv::Point3f> points; // x,y,z
-      bool flag;
+            Landmarks3DType() : flag(false) {};
+        } Landmarks3D;
 
-      Landmarks3DType() : flag(false)
-      {};
-    } Landmarks3D;
+        typedef struct LITE_EXPORTS BoxfWithLandmarksType
+        {
+            Boxf box;
+            Landmarks landmarks;
+            bool flag;
 
-    typedef struct LITE_EXPORTS BoxfWithLandmarksType
-    {
-      Boxf box;
-      Landmarks landmarks;
-      bool flag;
+            BoxfWithLandmarksType() : flag(false) {};
+        } BoxfWithLandmarks;
 
-      BoxfWithLandmarksType() : flag(false)
-      {};
-    } BoxfWithLandmarks;
+        // Oriented Bounding Box with angle (for YOLOv8-OBB)
+        typedef struct LITE_EXPORTS BoxfWithAngleType
+        {
+            float x1; // axis-aligned bbox approximation
+            float y1;
+            float x2;
+            float y2;
+            float cx;     // center x (xywhr format)
+            float cy;     // center y
+            float width;  // box width
+            float height; // box height
+            float angle;  // rotation angle in radians [-pi/4, 3*pi/4)
+            float score;
+            const char *label_text;
+            unsigned int label;
+            bool flag;
 
-    typedef struct LITE_EXPORTS EulerAnglesType
-    {
-      float yaw;
-      float pitch;
-      float roll;
-      bool flag;
+            BoxfWithAngleType() : x1(0.f), y1(0.f), x2(0.f), y2(0.f),
+                                  cx(0.f), cy(0.f), width(0.f), height(0.f),
+                                  angle(0.f), score(0.f), label_text(nullptr),
+                                  label(0), flag(false)
+            {
+            }
+        } BoxfWithAngle;
 
-      EulerAnglesType() : flag(false)
-      {};
-    } EulerAngles;
+        typedef struct LITE_EXPORTS EulerAnglesType
+        {
+            float yaw;
+            float pitch;
+            float roll;
+            bool flag;
 
-    typedef struct LITE_EXPORTS EmotionsType
-    {
-      float score;
-      unsigned int label;
-      const char *text;
-      bool flag;
+            EulerAnglesType() : flag(false) {};
+        } EulerAngles;
 
-      EmotionsType() : flag(false)
-      {};
-    } Emotions;
+        typedef struct LITE_EXPORTS EmotionsType
+        {
+            float score;
+            unsigned int label;
+            const char *text;
+            bool flag;
 
-    typedef struct LITE_EXPORTS AgeType
-    {
-      float age;
-      unsigned int age_interval[2];
-      float interval_prob;
-      bool flag;
+            EmotionsType() : flag(false) {};
+        } Emotions;
 
-      AgeType() : flag(false)
-      {};
-    } Age;
+        typedef struct LITE_EXPORTS AgeType
+        {
+            float age;
+            unsigned int age_interval[2];
+            float interval_prob;
+            bool flag;
 
-    typedef struct LITE_EXPORTS GenderType
-    {
-      float score;
-      unsigned int label;
-      const char *text;
-      bool flag;
+            AgeType() : flag(false) {};
+        } Age;
 
-      GenderType() : flag(false)
-      {};
-    } Gender;
+        typedef struct LITE_EXPORTS GenderType
+        {
+            float score;
+            unsigned int label;
+            const char *text;
+            bool flag;
 
-    typedef struct LITE_EXPORTS OCRContentType
-    {
-      const char *text;
-      unsigned int *codecs;
-      bool flag;
+            GenderType() : flag(false) {};
+        } Gender;
 
-      OCRContentType() : flag(false)
-      {};
-    } OCRContent;
+        typedef struct LITE_EXPORTS OCRContentType
+        {
+            const char *text;
+            unsigned int *codecs;
+            bool flag;
 
-    typedef struct LITE_EXPORTS FaceContentType
-    {
-      std::vector<float> embedding;
-      unsigned int dim;
-      bool flag;
+            OCRContentType() : flag(false) {};
+        } OCRContent;
 
-      FaceContentType() : flag(false)
-      {};
-    } FaceContent;
+        typedef struct LITE_EXPORTS FaceContentType
+        {
+            std::vector<float> embedding;
+            unsigned int dim;
+            bool flag;
 
-    typedef struct LITE_EXPORTS StyleContentType
-    {
-      cv::Mat mat;
-      bool flag;
+            FaceContentType() : flag(false) {};
+        } FaceContent;
 
-      StyleContentType() : flag(false)
-      {};
-    } StyleContent;
+        typedef struct LITE_EXPORTS StyleContentType
+        {
+            cv::Mat mat;
+            bool flag;
 
-    typedef struct LITE_EXPORTS SuperResolutionContentType
-    {
-      cv::Mat mat;
-      bool flag;
+            StyleContentType() : flag(false) {};
+        } StyleContent;
 
-      SuperResolutionContentType() : flag(false)
-      {};
-    } SuperResolutionContent;
+        typedef struct LITE_EXPORTS SuperResolutionContentType
+        {
+            cv::Mat mat;
+            bool flag;
 
-    typedef struct LITE_EXPORTS ColorizeContentType
-    {
-      cv::Mat mat;
-      bool flag;
+            SuperResolutionContentType() : flag(false) {};
+        } SuperResolutionContent;
 
-      ColorizeContentType() : flag(false)
-      {};
-    } ColorizeContent;
+        typedef struct LITE_EXPORTS ColorizeContentType
+        {
+            cv::Mat mat;
+            bool flag;
 
-    typedef struct LITE_EXPORTS ImageNetContentType
-    {
-      std::vector<float> scores; // sorted
-      std::vector<const char *> texts;
-      std::vector<unsigned int> labels;
-      bool flag;
+            ColorizeContentType() : flag(false) {};
+        } ColorizeContent;
 
-      ImageNetContentType() : flag(false)
-      {};
+        typedef struct LITE_EXPORTS ImageNetContentType
+        {
+            std::vector<float> scores; // sorted
+            std::vector<const char *> texts;
+            std::vector<unsigned int> labels;
+            bool flag;
 
-    } ImageNetContent;
+            ImageNetContentType() : flag(false) {};
 
-    typedef ImageNetContent ClassificationContent;
+        } ImageNetContent;
 
-    typedef struct LITE_EXPORTS SegmentContentType
-    {
-      cv::Mat class_mat; // 21|? classes 1 channel
-      cv::Mat color_mat; // 21 colors different classes, 3 channels.
-      std::unordered_map<int, std::string> names_map;
-      bool flag;
+        typedef ImageNetContent ClassificationContent;
 
-      SegmentContentType() : flag(false)
-      {};
-    } SegmentContent;
+        typedef struct LITE_EXPORTS SegmentContentType
+        {
+            cv::Mat class_mat; // 21|? classes 1 channel
+            cv::Mat color_mat; // 21 colors different classes, 3 channels.
+            std::unordered_map<int, std::string> names_map;
+            bool flag;
 
-    typedef struct LITE_EXPORTS MattingContentType
-    {
-      cv::Mat fgr_mat; // foreground mat 3 channel (R,G,B) 0.~1. or 0~255
-      cv::Mat pha_mat; // alpha(matte) 0.~1.
-      cv::Mat merge_mat; // merge bg and fg according pha
-      bool flag;
+            SegmentContentType() : flag(false) {};
+        } SegmentContent;
 
-      MattingContentType(): flag(false)
-      {};
-    } MattingContent;
+        typedef struct LITE_EXPORTS MattingContentType
+        {
+            cv::Mat fgr_mat;   // foreground mat 3 channel (R,G,B) 0.~1. or 0~255
+            cv::Mat pha_mat;   // alpha(matte) 0.~1.
+            cv::Mat merge_mat; // merge bg and fg according pha
+            bool flag;
 
-    typedef struct LITE_EXPORTS SegmentationMaskContentType
-    {
-      cv::Mat mask; // mask mat  (0. ~ 1.) | (0~255) | others
-      bool flag;
+            MattingContentType() : flag(false) {};
+        } MattingContent;
 
-      SegmentationMaskContentType(): flag(false)
-      {};
-    } SegmentationMaskContent;
+        typedef struct LITE_EXPORTS SegmentationMaskContentType
+        {
+            cv::Mat mask; // mask mat  (0. ~ 1.) | (0~255) | others
+            bool flag;
 
-    typedef struct LITE_EXPORTS Photo2CartoonContentType
-    {
-      cv::Mat cartoon;
-      bool flag;
+            SegmentationMaskContentType() : flag(false) {};
+        } SegmentationMaskContent;
 
-      Photo2CartoonContentType(): flag(false)
-      {};
-    } Photo2CartoonContent;
+        typedef struct LITE_EXPORTS Photo2CartoonContentType
+        {
+            cv::Mat cartoon;
+            bool flag;
 
-    typedef struct LITE_EXPORTS FaceParsingContentType
-    {
-      cv::Mat label; // integer labels 0 ~ 255 | 0 ~ 19 | ... so on
-      cv::Mat merge; // merge mat with original image and mask
-      bool flag;
+            Photo2CartoonContentType() : flag(false) {};
+        } Photo2CartoonContent;
 
-      FaceParsingContentType(): flag(false)
-      {};
-    } FaceParsingContent;
+        typedef struct LITE_EXPORTS FaceParsingContentType
+        {
+            cv::Mat label; // integer labels 0 ~ 255 | 0 ~ 19 | ... so on
+            cv::Mat merge; // merge mat with original image and mask
+            bool flag;
 
-    // alias
-    typedef SegmentationMaskContent HairSegContent;
-    typedef SegmentationMaskContent HeadSegContent;
-    typedef SegmentationMaskContent FaceHairSegContent;
-    typedef SegmentationMaskContent PortraitSegContent;
-    typedef Photo2CartoonContent FemalePhoto2CartoonContent;
+            FaceParsingContentType() : flag(false) {};
+        } FaceParsingContent;
 
-  } // NAMESPACE TYPES
+        // alias
+        typedef SegmentationMaskContent HairSegContent;
+        typedef SegmentationMaskContent HeadSegContent;
+        typedef SegmentationMaskContent FaceHairSegContent;
+        typedef SegmentationMaskContent PortraitSegContent;
+        typedef Photo2CartoonContent FemalePhoto2CartoonContent;
+
+    } // NAMESPACE TYPES
 }
 
 /**
@@ -274,93 +280,92 @@ namespace lite {
  */
 
 /* implementation for 'BoundingBox'. */
-template<typename T1, typename T2>
-template<typename O1, typename O2>
+template <typename T1, typename T2>
+template <typename O1, typename O2>
 inline lite::types::BoundingBoxType<O1, O2>
 lite::types::BoundingBoxType<T1, T2>::convert_type() const
 {
-  typedef O1 other_value_type;
-  typedef O2 other_score_type;
-  types::__assert_type<other_value_type, other_score_type>();
-  types::__assert_type<value_type, score_type>();
-  BoundingBoxType<other_value_type, other_score_type> other;
-  other.x1 = static_cast<other_value_type>(x1);
-  other.y1 = static_cast<other_value_type>(y1);
-  other.x2 = static_cast<other_value_type>(x2);
-  other.y2 = static_cast<other_value_type>(y2);
-  other.score = static_cast<other_score_type>(score);
-  other.label_text = label_text;
-  other.label = label;
-  other.flag = flag;
-  return other;
+    typedef O1 other_value_type;
+    typedef O2 other_score_type;
+    types::__assert_type<other_value_type, other_score_type>();
+    types::__assert_type<value_type, score_type>();
+    BoundingBoxType<other_value_type, other_score_type> other;
+    other.x1 = static_cast<other_value_type>(x1);
+    other.y1 = static_cast<other_value_type>(y1);
+    other.x2 = static_cast<other_value_type>(x2);
+    other.y2 = static_cast<other_value_type>(y2);
+    other.score = static_cast<other_score_type>(score);
+    other.label_text = label_text;
+    other.label = label;
+    other.flag = flag;
+    return other;
 }
 
-template<typename T1, typename T2>
-template<typename O1, typename O2>
+template <typename T1, typename T2>
+template <typename O1, typename O2>
 inline typename lite::types::BoundingBoxType<T1, T2>::value_type
 lite::types::BoundingBoxType<T1, T2>::iou_of(const BoundingBoxType<O1, O2> &other) const
 {
-  BoundingBoxType<value_type, score_type> tbox = \
-    other.template convert_type<value_type, score_type>();
-  value_type inner_x1 = x1 > tbox.x1 ? x1 : tbox.x1;
-  value_type inner_y1 = y1 > tbox.y1 ? y1 : tbox.y1;
-  value_type inner_x2 = x2 < tbox.x2 ? x2 : tbox.x2;
-  value_type inner_y2 = y2 < tbox.y2 ? y2 : tbox.y2;
-  value_type inner_h = inner_y2 - inner_y1 + static_cast<value_type>(1.0f);
-  value_type inner_w = inner_x2 - inner_x1 + static_cast<value_type>(1.0f);
-  if (inner_h <= static_cast<value_type>(0.f) || inner_w <= static_cast<value_type>(0.f))
-    return std::numeric_limits<value_type>::min();
-  value_type inner_area = inner_h * inner_w;
-  return static_cast<value_type>(inner_area / (area() + tbox.area() - inner_area));
+    BoundingBoxType<value_type, score_type> tbox =
+        other.template convert_type<value_type, score_type>();
+    value_type inner_x1 = x1 > tbox.x1 ? x1 : tbox.x1;
+    value_type inner_y1 = y1 > tbox.y1 ? y1 : tbox.y1;
+    value_type inner_x2 = x2 < tbox.x2 ? x2 : tbox.x2;
+    value_type inner_y2 = y2 < tbox.y2 ? y2 : tbox.y2;
+    value_type inner_h = inner_y2 - inner_y1 + static_cast<value_type>(1.0f);
+    value_type inner_w = inner_x2 - inner_x1 + static_cast<value_type>(1.0f);
+    if (inner_h <= static_cast<value_type>(0.f) || inner_w <= static_cast<value_type>(0.f))
+        return std::numeric_limits<value_type>::min();
+    value_type inner_area = inner_h * inner_w;
+    return static_cast<value_type>(inner_area / (area() + tbox.area() - inner_area));
 }
 
-template<typename T1, typename T2>
+template <typename T1, typename T2>
 inline ::cv::Rect lite::types::BoundingBoxType<T1, T2>::rect() const
 {
-  types::__assert_type<value_type, score_type>();
-  auto boxi = this->template convert_type<int>();
-  return ::cv::Rect(boxi.x1, boxi.y1, boxi.width(), boxi.height());
+    types::__assert_type<value_type, score_type>();
+    auto boxi = this->template convert_type<int>();
+    return ::cv::Rect(boxi.x1, boxi.y1, boxi.width(), boxi.height());
 }
 
-template<typename T1, typename T2>
+template <typename T1, typename T2>
 inline ::cv::Point2i lite::types::BoundingBoxType<T1, T2>::tl() const
 {
-  types::__assert_type<value_type, score_type>();
-  auto boxi = this->template convert_type<int>();
-  return ::cv::Point2i(boxi.x1, boxi.y1);
+    types::__assert_type<value_type, score_type>();
+    auto boxi = this->template convert_type<int>();
+    return ::cv::Point2i(boxi.x1, boxi.y1);
 }
 
-template<typename T1, typename T2>
+template <typename T1, typename T2>
 inline ::cv::Point2i lite::types::BoundingBoxType<T1, T2>::rb() const
 {
-  types::__assert_type<value_type, score_type>();
-  auto boxi = this->template convert_type<int>();
-  return ::cv::Point2i(boxi.x2, boxi.y2);
+    types::__assert_type<value_type, score_type>();
+    auto boxi = this->template convert_type<int>();
+    return ::cv::Point2i(boxi.x2, boxi.y2);
 }
 
-template<typename T1, typename T2>
+template <typename T1, typename T2>
 inline typename lite::types::BoundingBoxType<T1, T2>::value_type
 lite::types::BoundingBoxType<T1, T2>::width() const
 {
-  types::__assert_type<value_type, score_type>();
-  return (x2 - x1 + static_cast<value_type>(1));
+    types::__assert_type<value_type, score_type>();
+    return (x2 - x1 + static_cast<value_type>(1));
 }
 
-template<typename T1, typename T2>
+template <typename T1, typename T2>
 inline typename lite::types::BoundingBoxType<T1, T2>::value_type
 lite::types::BoundingBoxType<T1, T2>::height() const
 {
-  types::__assert_type<value_type, score_type>();
-  return (y2 - y1 + static_cast<value_type>(1));
+    types::__assert_type<value_type, score_type>();
+    return (y2 - y1 + static_cast<value_type>(1));
 }
 
-template<typename T1, typename T2>
+template <typename T1, typename T2>
 inline typename lite::types::BoundingBoxType<T1, T2>::value_type
 lite::types::BoundingBoxType<T1, T2>::area() const
 {
-  types::__assert_type<value_type, score_type>();
-  return std::abs<value_type>(width() * height());
+    types::__assert_type<value_type, score_type>();
+    return std::abs<value_type>(width() * height());
 }
 
-
-#endif //LITE_AI_TOOLKIT_TYPES_H
+#endif // LITE_AI_TOOLKIT_TYPES_H

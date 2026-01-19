@@ -9,23 +9,23 @@ else
   echo "build dir: ${BUILD_DIR} directory exist! ..."
 fi
 
-cd "${BUILD_DIR}" && pwd 
-if [ $1 == "tensorrt" ]; then
+cd "${BUILD_DIR}" && pwd
+if [ "$1" == "tensorrt" ]; then
   cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel \
-           -DCMAKE_INSTALL_PREFIX=./install \
+           -DCMAKE_INSTALL_PREFIX=/eibot/environment/waybill_perception_cpp_env \
            -DENABLE_TENSORRT=ON \
-           -DCUDA_DIR=/usr/local/cuda \
-           -DTensorRT_DIR=/usr/local/tensorrt \
+           -DCUDA_DIR=/usr/local/cuda-12.4 \
+           -DTensorRT_DIR=/usr \
            -DENABLE_TEST=ON
 
 else
   cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel \
-           -DCMAKE_INSTALL_PREFIX=./install \
+           -DCMAKE_INSTALL_PREFIX=/eibot/environment/waybill_perception_cpp_env \
            -DENABLE_TEST=ON
 fi
 
 make -j8
-make install
+sudo make install
 
 # bash ./build.sh
 # bash ./build.sh tensorrt
