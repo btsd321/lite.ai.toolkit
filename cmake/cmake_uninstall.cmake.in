@@ -23,4 +23,7 @@ endforeach()
 # Also remove directories
 message(STATUS "Removing directories...")
 execute_process(COMMAND rm -rf "@CMAKE_INSTALL_PREFIX@/include/lite")
+execute_process(COMMAND rm -rf "@CMAKE_INSTALL_PREFIX@/include/onnxruntime")
+execute_process(COMMAND rm -rf "@CMAKE_INSTALL_PREFIX@/include/tensorrt")
+execute_process(COMMAND rm -rf "@CMAKE_INSTALL_PREFIX@/lib/cmake/lite.ai.toolkit")
 message(STATUS "Uninstall completed.")

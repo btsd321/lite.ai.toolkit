@@ -68,9 +68,14 @@ install(TARGETS lite.ai.toolkit LIBRARY DESTINATION lib)
 
 # Install all third-party libraries to lib directory
 if(ENABLE_ONNXRUNTIME)
-  file(GLOB ONNXRUNTIME_LIBS "${OnnxRuntime_DIR}/lib/*.so*")
-  install(FILES ${ONNXRUNTIME_LIBS} DESTINATION lib)
-  message(STATUS "Will install onnxruntime libraries to ${CMAKE_INSTALL_PREFIX}/lib")
+  # Only install if ONNXRuntime is not in system paths
+  if(ONNXRUNTIME_INSTALL_DIR MATCHES "^/usr(/local)?(/|$)")
+    message(STATUS "Skip installing onnxruntime libraries (using system installation at ${ONNXRUNTIME_INSTALL_DIR})")
+  else()
+    file(GLOB ONNXRUNTIME_LIBS "${ONNXRUNTIME_INSTALL_DIR}/lib/*.so*")
+    install(FILES ${ONNXRUNTIME_LIBS} DESTINATION lib)
+    message(STATUS "Will install onnxruntime libraries from ${ONNXRUNTIME_INSTALL_DIR}/lib to ${CMAKE_INSTALL_PREFIX}/lib")
+  endif()
 endif()
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/lite/bin/libddim_scheduler_cpp.so)
@@ -82,12 +87,38 @@ endif()
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lite 
         DESTINATION ${CMAKE_INSTALL_PREFIX}/include
         FILES_MATCHING
-        PATTERN "*.h")
-# install(DIRECTORY ${THIRD_PARTY_PATH} DESTINATION ${CMAKE_INSTALL_PREFIX})
+        PATTERN "*.h"
+        PATTERN "*.cuh")
+
+# Install third-party headers (only if not system-installed)
+if(ENABLE_ONNXRUNTIME)
+  # Only install if ONNXRuntime is not in system paths
+  if(ONNXRUNTIME_INSTALL_DIR MATCHES "^/usr(/local)?(/|$)")
+    message(STATUS "Skip installing onnxruntime headers (using system installation at ${ONNXRUNTIME_INSTALL_DIR})")
+  else()
+    install(DIRECTORY ${ONNXRUNTIME_INSTALL_DIR}/include/
+            DESTINATION ${CMAKE_INSTALL_PREFIX}/include/onnxruntime
+            FILES_MATCHING PATTERN "*.h")
+    message(STATUS "Will install onnxruntime headers from ${ONNXRUNTIME_INSTALL_DIR}/include to ${CMAKE_INSTALL_PREFIX}/include/onnxruntime")
+  endif()
+endif()
+
+if(ENABLE_TENSORRT)
+  # Only install if TensorRT is not in system paths
+  if(TensorRT_DIR MATCHES "^/usr(/local)?(/|$)")
+    message(STATUS "Skip installing TensorRT headers (using system installation at ${TensorRT_DIR})")
+  else()
+    install(DIRECTORY ${TensorRT_DIR}/include/
+            DESTINATION ${CMAKE_INSTALL_PREFIX}/include/tensorrt
+            FILES_MATCHING PATTERN "*.h")
+    message(STATUS "Will install TensorRT headers to ${CMAKE_INSTALL_PREFIX}/include/tensorrt")
+  endif()
+endif()
+
 install(FILES ${CMAKE_BINARY_DIR}/lite.ai.toolkit.cmake 
-        DESTINATION ${CMAKE_INSTALL_PREFIX})
+        DESTINATION lib/cmake/lite.ai.toolkit)
 install(FILES ${CMAKE_SOURCE_DIR}/cmake/lite.ai.toolkit-config.cmake 
-        DESTINATION ${CMAKE_INSTALL_PREFIX})
+        DESTINATION lib/cmake/lite.ai.toolkit)
 
 # Add uninstall target
 if(NOT TARGET uninstall)

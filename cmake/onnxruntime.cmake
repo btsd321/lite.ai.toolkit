@@ -34,3 +34,6 @@ set(ORT_SRCS ${ONNXRUNTIME_CV_SRCS} ${ONNXRUNTIME_NLP_SRCS} ${ONNXRUNTIME_ASR_SR
 # 3. prepare install (headers will be installed at 'make install' stage, not configure stage)
 message("[Lite.AI.Toolkit][I] Preparing Lite.AI.ToolKit Headers for ONNXRuntime Backend ...")
 set(ORT_HEADERS ${ONNXRUNTIME_CORE_HEAD} ${ONNXRUNTIME_CV_HEAD} ${ONNXRUNTIME_ASR_HEAD} ${ONNXRUNTIME_NLP_HEAD} ${ONNXRUNTIME_SD_HEAD})
+
+# Export variables for installation
+set(ONNXRUNTIME_INSTALL_DIR ${OnnxRuntime_DIR} PARENT_SCOPE)
