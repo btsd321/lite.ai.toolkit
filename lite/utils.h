@@ -17,12 +17,14 @@ namespace lite
     // Drawing Utils
     LITE_EXPORTS cv::Mat draw_axis(const cv::Mat &mat, const types::EulerAngles &euler_angles, float size = 50.f, int thickness = 2);
     LITE_EXPORTS cv::Mat draw_boxes(const cv::Mat &mat, const std::vector<types::Boxf> &boxes);
+    LITE_EXPORTS cv::Mat draw_boxes_with_angle(const cv::Mat &mat, const std::vector<types::BoxfWithAngle> &boxes);
     LITE_EXPORTS cv::Mat draw_landmarks(const cv::Mat &mat, types::Landmarks &landmarks);
     LITE_EXPORTS cv::Mat draw_age(const cv::Mat &mat, types::Age &age);
     LITE_EXPORTS cv::Mat draw_gender(const cv::Mat &mat, types::Gender &gender);
     LITE_EXPORTS cv::Mat draw_emotion(const cv::Mat &mat, types::Emotions &emotions);
     LITE_EXPORTS cv::Mat draw_boxes_with_landmarks(const cv::Mat &mat, const std::vector<types::BoxfWithLandmarks> &boxes_kps, bool text = false);
     LITE_EXPORTS void draw_boxes_inplace(cv::Mat &mat_inplace, const std::vector<types::Boxf> &boxes);
+    LITE_EXPORTS void draw_boxes_with_angle_inplace(cv::Mat &mat_inplace, const std::vector<types::BoxfWithAngle> &boxes);
     LITE_EXPORTS void draw_axis_inplace(cv::Mat &mat_inplace, const types::EulerAngles &euler_angles, float size = 50.f, int thickness = 2);
     LITE_EXPORTS void draw_landmarks_inplace(cv::Mat &mat, types::Landmarks &landmarks);
     LITE_EXPORTS void draw_age_inplace(cv::Mat &mat_inplace, types::Age &age);

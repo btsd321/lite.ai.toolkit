@@ -13,7 +13,7 @@ void TRTYoloV8OBB::preprocess(cv::Mat &input_image)
     cv::cvtColor(input_image, input_image, cv::COLOR_BGR2RGB);
 
     // Resize image
-    cv::resize(input_image, input_image, cv::Size(input_node_dims[2], input_node_dims[3]), 0, 0, cv::INTER_LINEAR);
+    cv::resize(input_image, input_image, cv::Size(input_node_dims[3], input_node_dims[2]), 0, 0, cv::INTER_LINEAR);
 
     // Normalize image
     input_image.convertTo(input_image, CV_32F, scale_val, mean_val);
@@ -27,55 +27,68 @@ void TRTYoloV8OBB::generate_bboxes_obb(
     int img_width)
 {
 
+    if (output_node_dims.empty() || output_node_dims[0].empty())
+    {
+        std::cerr << "Error: Invalid output dimensions" << std::endl;
+        return;
+    }
+
     auto pred_dims = output_node_dims[0];
-    const unsigned int num_anchors = pred_dims[2];     // e.g., 8400
-    const unsigned int num_classes = pred_dims[1] - 5; // bbox(4) + angle(1) + classes
+    const unsigned int num_anchors = pred_dims[2]; // e.g., 8400
+    const unsigned int num_classes = pred_dims[1] - 5; // Auto-detect: total_channels - (4 bbox + 1 angle)
+    
+    // Model output format (verified via ONNX analysis): [cx, cy, w, h, cls0, cls1, ..., clsN-1, angle]
+    // ch0-3: bbox coordinates, ch4 to ch(4+num_classes-1): sigmoid-activated class scores, last channel: angle in radians
 
     float x_factor = float(img_width) / input_node_dims[3];
     float y_factor = float(img_height) / input_node_dims[2];
 
     bbox_collection.clear();
     unsigned int count = 0;
-
-    // YOLOv8-OBB output format: [cx, cy, w, h, angle, class0, class1, ...]
-    // Transpose layout: [4+1+nc, num_anchors] -> iterate over num_anchors
+    
     for (unsigned int i = 0; i < num_anchors; ++i)
     {
-        // Extract class scores
-        std::vector<float> class_scores(num_classes);
+        // Extract class scores from ch4-9 (already sigmoid-activated by the model)
+        float max_cls_conf = -FLT_MAX;
+        unsigned int label = 0;
+        
         for (unsigned int j = 0; j < num_classes; ++j)
         {
-            class_scores[j] = output[(5 + j) * num_anchors + i];
+            float score = output[(4 + j) * num_anchors + i]; // ch4-9
+            if (score > max_cls_conf)
+            {
+                max_cls_conf = score;
+                label = j;
+            }
         }
 
-        auto max_it = std::max_element(class_scores.begin(), class_scores.end());
-        float max_cls_conf = *max_it;
-        unsigned int label = std::distance(class_scores.begin(), max_it);
-
         float conf = max_cls_conf;
+        
         if (conf < score_threshold)
             continue;
 
-        // Extract bbox (cx, cy, w, h)
+        // Extract bbox (cx, cy, w, h) from ch0-3
         float cx = output[0 * num_anchors + i];
         float cy = output[1 * num_anchors + i];
         float w = output[2 * num_anchors + i];
         float h = output[3 * num_anchors + i];
 
-        // Extract angle (in radians)
-        float angle = output[4 * num_anchors + i];
+        // Extract angle from last channel (ch: 4+num_classes)
+        float angle = output[(4 + num_classes) * num_anchors + i];
 
-        // Scale to original image size
-        cx = cx * x_factor;
-        cy = cy * y_factor;
+        // Calculate x1, y1 first, then scale (same as yolov8)
+        float x1 = (cx - w / 2.f) * x_factor;
+        float y1 = (cy - h / 2.f) * y_factor;
+
         w = w * x_factor;
         h = h * y_factor;
 
-        // Convert to x1, y1, x2, y2 for axis-aligned bbox approximation
-        float x1 = cx - w / 2.f;
-        float y1 = cy - h / 2.f;
-        float x2 = cx + w / 2.f;
-        float y2 = cy + h / 2.f;
+        float x2 = x1 + w;
+        float y2 = y1 + h;
+
+        // Scale center for rotated box
+        cx = cx * x_factor;
+        cy = cy * y_factor;
 
         types::BoxfWithAngle box;
         box.x1 = std::max(0.f, x1);
@@ -89,7 +102,7 @@ void TRTYoloV8OBB::generate_bboxes_obb(
         box.angle = angle; // radians, range: [-pi/4, 3*pi/4)
         box.score = conf;
         box.label = label;
-        box.label_text = class_names[label];
+        box.label_text = get_class_name(label);
         box.flag = true;
 
         bbox_collection.push_back(box);
@@ -182,16 +195,13 @@ void TRTYoloV8OBB::nms_obb(
                 continue;
 
             float iou = compute_obb_iou(input[i], input[j]);
+            
             if (iou > iou_threshold)
             {
                 suppressed[j] = true;
             }
         }
     }
-
-#if LITETRT_DEBUG
-    std::cout << "NMS input: " << input.size() << ", output: " << output.size() << "\n";
-#endif
 }
 
 void TRTYoloV8OBB::detect(
@@ -205,18 +215,24 @@ void TRTYoloV8OBB::detect(
     if (mat.empty())
         return;
 
+    if (output_node_dims.empty() || output_node_dims[0].empty())
+    {
+        std::cerr << "Error: TensorRT engine not properly initialized. Output dimensions are empty." << std::endl;
+        return;
+    }
+
     int img_height = static_cast<int>(mat.rows);
     int img_width = static_cast<int>(mat.cols);
 
-    // Preprocessing
+    // resize & unscale
     cv::Mat mat_rs = mat.clone();
     preprocess(mat_rs);
 
-    // 1. Prepare input tensor
+    // 1. make the input
     std::vector<float> input;
     trtcv::utils::transform::create_tensor(mat_rs, input, input_node_dims, trtcv::utils::transform::CHW);
 
-    // 2. TensorRT inference
+    // 2. infer
     cudaMemcpyAsync(buffers[0], input.data(),
                     input_node_dims[0] * input_node_dims[1] * input_node_dims[2] * input_node_dims[3] * sizeof(float),
                     cudaMemcpyHostToDevice, stream);
@@ -248,5 +264,6 @@ void TRTYoloV8OBB::detect(
     generate_bboxes_obb(bbox_collection, output.data(), score_threshold, img_height, img_width);
 
     // 5. NMS
+    detected_boxes.clear();
     nms_obb(bbox_collection, detected_boxes, iou_threshold, topk);
 }

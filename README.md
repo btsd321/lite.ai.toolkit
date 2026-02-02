@@ -241,7 +241,16 @@ generate_bboxes num: 48
 |Class|Class|Class|Class|Class| System | Engine |  
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|      
 |✅[YOLOv5](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_yolov5.cpp)|✅[YOLOv6](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_yolov6.cpp)|✅[YOLOv8](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_yolov8.cpp)|✅[YOLOv8Face](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_yolov8face.cpp)|✅[YOLOv5Face](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_yolo5face.cpp)|  Linux | TensorRT |  
-|✅[YOLOX](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_yolox.cpp)|✅[YOLOv5BlazeFace](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_yolov5_blazeface.cpp) |✅[StableDiffusion](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/sd/test_lite_sd_pipeline.cpp)| ✅[FaceFusion](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_facefusion_pipeline_gpu.cpp) |  / |  Linux | TensorRT |
+|✅[YOLOX](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_yolox.cpp)|✅[YOLOv5BlazeFace](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_yolov5_blazeface.cpp) |✅[StableDiffusion](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/sd/test_lite_sd_pipeline.cpp)| ✅[FaceFusion](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_facefusion_pipeline_gpu.cpp) | ✅[YOLOv8-OBB](https://github.com/xlite-dev/lite.ai.toolkit/blob/main/examples/lite/cv/test_lite_yolov8_obb.cpp) |  Linux | TensorRT |
+
+**YOLOv8-OBB Model Output Format** (verified via ONNX analysis):
+- **Shape**: `[1, C, 8400]` - Batch size 1, C channels (C = 4 + num_classes + 1), 8400 anchors
+- **Channel Layout**: `[cx, cy, w, h, cls0, cls1, ..., clsN-1, angle]`
+  - `ch0-3`: Bounding box coordinates (center_x, center_y, width, height)
+  - `ch4 to ch(C-2)`: Class scores (num_classes = C - 5, **sigmoid-activated** by the model)
+  - `ch(C-1)`: Rotation angle in radians, range: `[-π/4, 3π/4)`
+- **Example**: For 6 classes model, C=11, layout is `[cx, cy, w, h, cls0-5, angle]`
+- **Note**: Class scores are already sigmoid-activated in the ONNX model, no additional activation needed in C++ code. Number of classes is automatically detected from model output dimensions.
 
 
 ### CPU Inference: ONNXRuntime, MNN, NCNN and TNN

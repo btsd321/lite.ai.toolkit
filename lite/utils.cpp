@@ -144,6 +144,53 @@ void lite::utils::draw_boxes_inplace(cv::Mat &mat_inplace, const std::vector<typ
   }
 }
 
+void lite::utils::draw_boxes_with_angle_inplace(cv::Mat &mat_inplace, const std::vector<types::BoxfWithAngle> &boxes)
+{
+  if (boxes.empty()) return;
+  for (const auto &box: boxes)
+  {
+    if (box.flag)
+    {
+      // Create rotated rectangle
+      cv::RotatedRect rotated_rect(
+          cv::Point2f(box.cx, box.cy),
+          cv::Size2f(box.width, box.height),
+          box.angle * 180.0f / CV_PI  // Convert radians to degrees
+      );
+
+      // Get the 4 corner points
+      cv::Point2f vertices[4];
+      rotated_rect.points(vertices);
+
+      // Draw the rotated rectangle
+      for (int i = 0; i < 4; i++)
+      {
+        cv::line(mat_inplace, vertices[i], vertices[(i + 1) % 4], cv::Scalar(0, 255, 255), 2);
+      }
+
+      // Draw label text
+      if (box.label_text)
+      {
+        std::string label_text(box.label_text);
+        label_text = label_text + ":" + std::to_string(box.score).substr(0, 4);
+        
+        // Position text near the top-left vertex
+        cv::Point text_position(static_cast<int>(vertices[0].x), static_cast<int>(vertices[0].y) - 5);
+        cv::putText(mat_inplace, label_text, text_position, cv::FONT_HERSHEY_SIMPLEX,
+                    0.6f, cv::Scalar(0, 255, 0), 2);
+      }
+    }
+  }
+}
+
+cv::Mat lite::utils::draw_boxes_with_angle(const cv::Mat &mat, const std::vector<types::BoxfWithAngle> &boxes)
+{
+  if (boxes.empty()) return mat;
+  cv::Mat mat_copy = mat.clone();
+  draw_boxes_with_angle_inplace(mat_copy, boxes);
+  return mat_copy;
+}
+
 void lite::utils::draw_boxes_with_landmarks_inplace(cv::Mat &mat_inplace, const std::vector<types::BoxfWithLandmarks> &boxes_kps, bool text)
 {
   if (boxes_kps.empty()) return;

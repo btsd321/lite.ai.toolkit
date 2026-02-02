@@ -16,16 +16,31 @@ namespace trtcv
     class LITE_EXPORTS TRTYoloV8OBB : public BasicTRTHandler
     {
     public:
-        explicit TRTYoloV8OBB(const std::string &_trt_model_path, unsigned int _num_threads = 1) : BasicTRTHandler(_trt_model_path, _num_threads) {};
+        explicit TRTYoloV8OBB(const std::string &_trt_model_path, unsigned int _num_threads = 1) : BasicTRTHandler(_trt_model_path, _num_threads) 
+        {
+            // Initialize with default COCO class names
+            init_default_class_names();
+        };
 
         ~TRTYoloV8OBB() override = default;
+
+        // Method to set custom class names
+        void set_class_names(const std::vector<std::string> &names)
+        {
+            custom_class_names = names;
+            use_custom_class_names = true;
+        }
 
     private:
         static constexpr const float mean_val = 0.f;
         static constexpr const float scale_val = 1.0 / 255.f;
 
-        // Default COCO classes, can be overridden
-        const char *class_names[80] = {
+        // Flag to determine which class names to use
+        bool use_custom_class_names = false;
+        std::vector<std::string> custom_class_names;
+
+        // Default COCO classes
+        const char *default_class_names[80] = {
             "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
             "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
             "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
@@ -63,6 +78,24 @@ namespace trtcv
         float compute_obb_iou(
             const types::BoxfWithAngle &box1,
             const types::BoxfWithAngle &box2);
+
+        void init_default_class_names()
+        {
+            // This is called in constructor to initialize default names
+        }
+
+        const char *get_class_name(unsigned int label)
+        {
+            if (use_custom_class_names && label < custom_class_names.size())
+            {
+                return custom_class_names[label].c_str();
+            }
+            else if (label < 80)
+            {
+                return default_class_names[label];
+            }
+            return "unknown";
+        }
 
     public:
         void detect(const cv::Mat &mat,

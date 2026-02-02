@@ -15,12 +15,14 @@ if [ "$1" == "tensorrt" ]; then
            -DCMAKE_INSTALL_PREFIX=/eibot/environment/waybill_perception_cpp_env \
            -DENABLE_TENSORRT=ON \
            -DCUDA_DIR=/usr/local/cuda-12.9 \
+           -DOpenCV_DIR=/eibot/environment/waybill_perception_cpp_env/lib/cmake/opencv4 \
            -DTensorRT_DIR=/usr \
            -DENABLE_TEST=ON
 
 else
   cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo \
            -DCMAKE_INSTALL_PREFIX=/eibot/environment/waybill_perception_cpp_env \
+           -DOpenCV_DIR=/eibot/environment/waybill_perception_cpp_env/lib/cmake/opencv4 \
            -DENABLE_TEST=ON
 fi
 
