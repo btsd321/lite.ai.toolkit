@@ -66,6 +66,13 @@ include(cmake/opencv.cmake)
 add_lite_ai_toolkit_shared_library(${VERSION_STRING} ${SOVERSION_STRING})
 install(TARGETS lite.ai.toolkit LIBRARY DESTINATION lib)
 
+# Install all third-party libraries to lib directory
+if(ENABLE_ONNXRUNTIME)
+  file(GLOB ONNXRUNTIME_LIBS "${OnnxRuntime_DIR}/lib/*.so*")
+  install(FILES ${ONNXRUNTIME_LIBS} DESTINATION lib)
+  message(STATUS "Will install onnxruntime libraries to ${CMAKE_INSTALL_PREFIX}/lib")
+endif()
+
 if(EXISTS ${CMAKE_SOURCE_DIR}/lite/bin/libddim_scheduler_cpp.so)
   install(FILES ${CMAKE_SOURCE_DIR}/lite/bin/libddim_scheduler_cpp.so 
           DESTINATION lib)
@@ -76,7 +83,7 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/lite
         DESTINATION ${CMAKE_INSTALL_PREFIX}/include
         FILES_MATCHING
         PATTERN "*.h")
-install(DIRECTORY ${THIRD_PARTY_PATH} DESTINATION ${CMAKE_INSTALL_PREFIX})
+# install(DIRECTORY ${THIRD_PARTY_PATH} DESTINATION ${CMAKE_INSTALL_PREFIX})
 install(FILES ${CMAKE_BINARY_DIR}/lite.ai.toolkit.cmake 
         DESTINATION ${CMAKE_INSTALL_PREFIX})
 install(FILES ${CMAKE_SOURCE_DIR}/cmake/lite.ai.toolkit-config.cmake 
@@ -96,10 +103,10 @@ endif()
 if (ENABLE_TEST)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_INSTALL_PREFIX}/bin)
     add_subdirectory(examples/lite)
-    if ((UNIX AND NOT APPLE))
-        file(GLOB_RECURSE ALL_THIRD_LIBS ${THIRD_PARTY_PATH} FOLLOW_SYMLINKS *.so*)
-        install(FILES ${ALL_THIRD_LIBS} DESTINATION ${EXECUTABLE_OUTPUT_PATH})
-    endif()
+    # if ((UNIX AND NOT APPLE))
+    #     file(GLOB_RECURSE ALL_THIRD_LIBS ${THIRD_PARTY_PATH} FOLLOW_SYMLINKS *.so*)
+    #     install(FILES ${ALL_THIRD_LIBS} DESTINATION ${EXECUTABLE_OUTPUT_PATH})
+    # endif()
 endif ()
 
 message(STATUS "-------------------------- lite.ai.toolkit Configuration Summary --------------------------")

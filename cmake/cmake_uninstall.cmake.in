@@ -23,5 +23,4 @@ endforeach()
 # Also remove directories
 message(STATUS "Removing directories...")
 execute_process(COMMAND rm -rf "@CMAKE_INSTALL_PREFIX@/include/lite")
-execute_process(COMMAND rm -rf "@CMAKE_INSTALL_PREFIX@/third_party")
 message(STATUS "Uninstall completed.")

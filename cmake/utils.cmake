@@ -79,6 +79,10 @@ function(add_lite_ai_toolkit_shared_library version soversion)
     add_library(lite.ai.toolkit SHARED ${LITE_SRCS})
     target_link_libraries(lite.ai.toolkit ${LITE_DEPENDENCIES})
     set_target_properties(lite.ai.toolkit PROPERTIES VERSION ${version} SOVERSION ${soversion})
+    # Set RPATH so that lite.ai.toolkit can find libraries in the same directory
+    set_target_properties(lite.ai.toolkit PROPERTIES 
+        INSTALL_RPATH "$ORIGIN"
+        BUILD_WITH_INSTALL_RPATH TRUE)
     message("[Lite.AI.Toolkit][I] Added Shared Library: lite.ai.toolkit !")
 
 endfunction()
