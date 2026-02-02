@@ -776,6 +776,7 @@ namespace lite
             typedef trtcv::TRTYoloX _TRT_YoloX;
             typedef trtcv::TRTYoloV6 _TRT_YOLOv6;
             typedef trtcv::TRTYOLO12 _TRT_YOLO12;
+            typedef trtcv::TRTYOLOV11 _TRT_YOLOV11;
             typedef trtcv::TRTYOLO5Face _TRT_YOLO5Face;
             typedef trtcv::TRTLightEnhance _TRT_LightEnhance;
             typedef trtcv::TRTRealESRGAN _TRT_RealESRGAN;
@@ -801,6 +802,7 @@ namespace lite
                 typedef _TRT_YoloX YoloX;
                 typedef _TRT_YOLOv6 YOLOV6;
                 typedef _TRT_YOLO12 YOLO12;
+                typedef _TRT_YOLOV11 YOLOV11;
             }
             namespace face
             {
