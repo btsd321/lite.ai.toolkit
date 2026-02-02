@@ -19,6 +19,7 @@ namespace trtcv
     class LITE_EXPORTS TRTYoloV6;     // [6] * reference: https://github.com/meituan/YOLOv6
     class LITE_EXPORTS TRTYOLO5Face;  // [7] * reference: https://github.com/deepcam-cn/yolov5-face
     class LITE_EXPORTS TRTYOLO12;     // [8] * reference: https://github.com/ultralytics/ultralytics
+    class LITE_EXPORTS TRTYOLOV11;    // [9] * reference: https://github.com/ultralytics/ultralytics
 }
 
 namespace trtcv

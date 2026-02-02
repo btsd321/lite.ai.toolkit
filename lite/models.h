@@ -140,6 +140,7 @@
 #include "lite/trt/cv/trt_yolov8_obb.h"
 #include "lite/trt/cv/trt_yolov6.h"
 #include "lite/trt/cv/trt_yolo12.h"
+#include "lite/trt/cv/trt_yolov11.h"
 #include "lite/trt/cv/trt_modnet.h"
 #include "lite/trt/cv/trt_yolov5_blazeface.h"
 #include "lite/trt/cv/trt_lightenhance.h"
