@@ -111,6 +111,7 @@
 #include "lite/ort/cv/mobile_hair_seg.h"
 #include "lite/ort/cv/yolov6.h"
 #include "lite/ort/cv/yolo12.h"
+#include "lite/ort/cv/yolo26_obb.h"
 #include "lite/ort/cv/face_parsing_bisenet.h"
 #include "lite/ort/cv/face_parsing_bisenet_dyn.h"
 #include "lite/ort/cv/yolofacev8.h"
@@ -140,6 +141,7 @@
 #include "lite/trt/cv/trt_yolov8_obb.h"
 #include "lite/trt/cv/trt_yolov6.h"
 #include "lite/trt/cv/trt_yolo12.h"
+#include "lite/trt/cv/trt_yolo26_obb.h"
 #include "lite/trt/cv/trt_yolov11.h"
 #include "lite/trt/cv/trt_modnet.h"
 #include "lite/trt/cv/trt_yolov5_blazeface.h"
@@ -515,6 +517,7 @@ namespace lite
             typedef ortcv::MobileHairSeg _ONNXMobileHairSeg;
             typedef ortcv::YOLOv6 _ONNXYOLOv6;
             typedef ortcv::YOLO12 _ONNXYOLO12;
+            typedef ortcv::YOLO26OBB _ONNXYOLO26OBB;
             typedef ortcv::FaceParsingBiSeNet _ONNXFaceParsingBiSeNet;
             typedef ortcv::FaceParsingBiSeNetDyn _ONNXFaceParsingBiSeNetDyn;
             typedef ortcv::YoloFaceV8 _ONNXYOLOFaceNet;
@@ -570,6 +573,7 @@ namespace lite
                 typedef _ONNXYoloV5_V_6_1 YoloV5_V_6_1;
                 typedef _ONNXYOLOv6 YOLOv6;
                 typedef _ONNXYOLO12 YOLO12;
+                typedef _ONNXYOLO26OBB YOLO26OBB;
             }
             // 3. face detection & facial attributes detection
             namespace face
@@ -773,6 +777,7 @@ namespace lite
             typedef trtcv::TRTYoloV5 _TRT_YOLOv5;
             typedef trtcv::TRTYoloV8 _TRT_YOLOv8;
             typedef trtcv::TRTYoloV8OBB _TRT_YOLOv8OBB;
+            typedef trtcv::TRTYOLO26OBB _TRT_YOLO26OBB;
             typedef trtcv::TRTYoloX _TRT_YoloX;
             typedef trtcv::TRTYoloV6 _TRT_YOLOv6;
             typedef trtcv::TRTYOLO12 _TRT_YOLO12;
@@ -799,6 +804,7 @@ namespace lite
                 typedef _TRT_YOLOv5 YOLOV5;
                 typedef _TRT_YOLOv8 YOLOV8;
                 typedef _TRT_YOLOv8OBB YOLOV8OBB;
+                typedef _TRT_YOLO26OBB YOLO26OBB;
                 typedef _TRT_YoloX YoloX;
                 typedef _TRT_YOLOv6 YOLOV6;
                 typedef _TRT_YOLO12 YOLO12;
