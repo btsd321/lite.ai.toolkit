@@ -149,11 +149,11 @@ void TRTYOLO26OBB::generate_bboxes_obb(const YOLO26OBBScaleParams &scale_params,
     {
         const float *detection = output + i * detection_dim;
         
-        // Parse detection: [x1, y1, x2, y2, score, class_id, angle]
-        float x1 = detection[0];
-        float y1 = detection[1];
-        float x2 = detection[2];
-        float y2 = detection[3];
+        // Parse detection: [cx, cy, w, h, score, class_id, angle]
+        float cx = detection[0];
+        float cy = detection[1];
+        float width = detection[2];
+        float height = detection[3];
         float score = detection[4];
         float class_id_f = detection[5];
         float angle = detection[6];
@@ -165,27 +165,26 @@ void TRTYOLO26OBB::generate_bboxes_obb(const YOLO26OBBScaleParams &scale_params,
         unsigned int label = static_cast<unsigned int>(class_id_f);
         
         // Unscale coordinates back to original image size
-        // The model outputs are in input image space (640x640)
-        // Need to map back to original image space
+        // The model outputs are in input image space (640x640) with center point format
         if (scale_params.flag)
         {
-            x1 = (x1 - scale_params.dw) / scale_params.r;
-            y1 = (y1 - scale_params.dh) / scale_params.r;
-            x2 = (x2 - scale_params.dw) / scale_params.r;
-            y2 = (y2 - scale_params.dh) / scale_params.r;
+            cx = (cx - scale_params.dw) / scale_params.r;
+            cy = (cy - scale_params.dh) / scale_params.r;
+            width = width / scale_params.r;
+            height = height / scale_params.r;
         }
+        
+        // Calculate corner coordinates from center
+        float x1 = cx - width / 2.f;
+        float y1 = cy - height / 2.f;
+        float x2 = cx + width / 2.f;
+        float y2 = cy + height / 2.f;
         
         // Clamp to image boundaries
         x1 = std::max(0.f, std::min(x1, (float)img_width - 1.f));
         y1 = std::max(0.f, std::min(y1, (float)img_height - 1.f));
         x2 = std::max(0.f, std::min(x2, (float)img_width - 1.f));
         y2 = std::max(0.f, std::min(y2, (float)img_height - 1.f));
-        
-        // Calculate center and dimensions for rotated box
-        float cx = (x1 + x2) / 2.f;
-        float cy = (y1 + y2) / 2.f;
-        float width = x2 - x1;
-        float height = y2 - y1;
         
         types::BoxfWithAngle box;
         box.x1 = x1;
