@@ -82,12 +82,32 @@ private:
     void resize_unscale(const cv::Mat &mat, cv::Mat &mat_rs, int target_height, int target_width,
                         YOLO26OBBScaleParams &scale_params);
 
+    // Detect model type based on output dimensions
+    void detect_model_type();
+
+    // For end-to-end models (with built-in NMS)
     void generate_bboxes_obb(const YOLO26OBBScaleParams &scale_params,
                              std::vector<types::BoxfWithAngle> &bbox_collection,
                              float *output,
                              float score_threshold,
                              int img_height,
                              int img_width);
+
+    // For non-end-to-end models (without built-in NMS, like YOLOv8-OBB)
+    void generate_bboxes_obb_non_end2end(const YOLO26OBBScaleParams &scale_params,
+                                         std::vector<types::BoxfWithAngle> &bbox_collection,
+                                         float *output,
+                                         float score_threshold,
+                                         int img_height,
+                                         int img_width);
+
+    void nms_obb(std::vector<types::BoxfWithAngle> &input,
+                 std::vector<types::BoxfWithAngle> &output,
+                 float iou_threshold,
+                 unsigned int topk);
+
+    float compute_obb_iou(const types::BoxfWithAngle &box1,
+                          const types::BoxfWithAngle &box2);
 
     void init_default_class_names()
     {
