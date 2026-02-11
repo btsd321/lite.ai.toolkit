@@ -49,6 +49,17 @@ namespace ortcv
         bool use_custom_class_names = false;
         std::vector<std::string> custom_class_names;
         
+        // Flag to determine if model is end-to-end (with built-in NMS) or non-end-to-end
+        bool is_end2end_ = true;
+        
+        enum NMS
+        {
+            HARD = 0,
+            BLEND = 1,
+            OFFSET = 2
+        };
+        static constexpr const unsigned int max_nms = 30000;
+        
         // Default COCO classes (can be overridden)
         const char *default_class_names[80] = {
             "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",

@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Get the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Change to project root directory (where the script is located)
+cd "${SCRIPT_DIR}" || exit 1
+echo "Working directory: $(pwd)"
+
 BUILD_DIR=build
 
 if [ ! -d "${BUILD_DIR}" ]; then

@@ -62,24 +62,26 @@ void YOLO26OBB::resize_unscale(const cv::Mat &mat, cv::Mat &mat_rs,
 
 void YOLO26OBB::detect_model_type()
 {
-    if (output_node_dims.empty() || output_node_dims.size() < 3)
+    if (output_node_dims.empty() || output_node_dims[0].size() < 3)
     {
         std::cerr << "Warning: Unable to determine model type, defaulting to end-to-end" << std::endl;
         is_end2end_ = true;
         return;
     }
 
+    auto &first_output_dims = output_node_dims[0];
+    
     // End-to-end model: [batch, num_detections, 7] e.g., [1, 300, 7]
     // Non-end-to-end model: [batch, num_channels, num_anchors] e.g., [1, 10, 8400]
     
     // If last dimension is 7 and middle dimension is relatively small (< 1000),
     // it's likely end-to-end with format [x1, y1, x2, y2, score, class_id, angle]
-    if (output_node_dims[2] == 7 && output_node_dims[1] < 1000)
+    if (first_output_dims[2] == 7 && first_output_dims[1] < 1000)
     {
         is_end2end_ = true;
 #ifdef LITEORT_DEBUG
         std::cout << "Detected end-to-end model with output shape: ["
-                  << output_node_dims[0] << ", " << output_node_dims[1] << ", " << output_node_dims[2] << "]" << std::endl;
+                  << first_output_dims[0] << ", " << first_output_dims[1] << ", " << first_output_dims[2] << "]" << std::endl;
 #endif
     }
     // Otherwise, it's non-end-to-end with format [batch, channels, anchors]
@@ -88,7 +90,7 @@ void YOLO26OBB::detect_model_type()
         is_end2end_ = false;
 #ifdef LITEORT_DEBUG
         std::cout << "Detected non-end-to-end model with output shape: ["
-                  << output_node_dims[0] << ", " << output_node_dims[1] << ", " << output_node_dims[2] << "]" << std::endl;
+                  << first_output_dims[0] << ", " << first_output_dims[1] << ", " << first_output_dims[2] << "]" << std::endl;
 #endif
     }
 }
