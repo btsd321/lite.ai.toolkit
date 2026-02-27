@@ -52,8 +52,21 @@ function(add_lite_ai_toolkit_shared_library version soversion)
     if (ENABLE_TENSORRT)
         include(cmake/tensorrt.cmake)
         set(LITE_SRCS ${LITE_SRCS} ${TRT_SRCS})
+      # Prefer absolute TensorRT library paths to avoid accidentally linking
+      # against another TensorRT version from system CUDA directories.
+      if (EXISTS "${TensorRT_DIR}/lib/libnvinfer.so" AND
+        EXISTS "${TensorRT_DIR}/lib/libnvonnxparser.so" AND
+        EXISTS "${TensorRT_DIR}/lib/libnvinfer_plugin.so")
+        set(LITE_DEPENDENCIES ${LITE_DEPENDENCIES} cuda cudart
+                               ${TensorRT_DIR}/lib/libnvinfer.so
+                               ${TensorRT_DIR}/lib/libnvonnxparser.so
+                               ${TensorRT_DIR}/lib/libnvinfer_plugin.so
+                               ddim_scheduler_cpp)
+      else()
+        message(WARNING "[Lite.AI.Toolkit][W] TensorRT full-path libs not found in ${TensorRT_DIR}/lib, fallback to linker search names.")
         set(LITE_DEPENDENCIES ${LITE_DEPENDENCIES} cuda cudart nvinfer nvonnxparser
-                                                   nvinfer_plugin ddim_scheduler_cpp)
+                               nvinfer_plugin ddim_scheduler_cpp)
+      endif()
         link_directories(${CMAKE_SOURCE_DIR}/lite/bin)
     endif ()
 
@@ -79,10 +92,22 @@ function(add_lite_ai_toolkit_shared_library version soversion)
     add_library(lite.ai.toolkit SHARED ${LITE_SRCS})
     target_link_libraries(lite.ai.toolkit ${LITE_DEPENDENCIES})
     set_target_properties(lite.ai.toolkit PROPERTIES VERSION ${version} SOVERSION ${soversion})
-    # Set RPATH so that lite.ai.toolkit can find libraries in the same directory
-    set_target_properties(lite.ai.toolkit PROPERTIES 
-        INSTALL_RPATH "$ORIGIN"
-        BUILD_WITH_INSTALL_RPATH TRUE)
+    # Set RPATH so that lite.ai.toolkit can find:
+    #   1. Libraries installed alongside it ($ORIGIN)
+    #   2. The exact TensorRT version used at build time (TensorRT_DIR/lib)
+    #      This prevents the dynamic linker from picking up a different TRT version
+    #      that may exist in system CUDA directories (e.g. libnvinfer.so.10 from
+    #      /usr/local/cuda/targets/...), which would cause vtable/RTTI mismatches
+    #      and a SIGSEGV inside deserializeCudaEngine.
+    if (ENABLE_TENSORRT AND TensorRT_DIR)
+        set_target_properties(lite.ai.toolkit PROPERTIES
+            INSTALL_RPATH "$ORIGIN:${TensorRT_DIR}/lib"
+            BUILD_WITH_INSTALL_RPATH TRUE)
+    else()
+        set_target_properties(lite.ai.toolkit PROPERTIES
+            INSTALL_RPATH "$ORIGIN"
+            BUILD_WITH_INSTALL_RPATH TRUE)
+    endif()
     message("[Lite.AI.Toolkit][I] Added Shared Library: lite.ai.toolkit !")
 
 endfunction()

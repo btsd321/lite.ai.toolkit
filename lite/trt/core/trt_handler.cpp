@@ -43,16 +43,36 @@ void BasicTRTHandler::initialize_handler()
     // Check for Ultralytics metadata header (4-byte length + JSON metadata)
     // Format: [4 bytes: metadata length (little-endian)] [N bytes: JSON] [rest:
     // TensorRT engine]
+    //
+    // IMPORTANT: A raw TRT engine's first 4 bytes can also be a small positive
+    // integer (e.g. the TRT magic / plan version number), which would satisfy
+    // a naive range check and cause us to skip the real engine header, feeding
+    // garbage to deserializeCudaEngine (crash at 0x0000000200000000).
+    //
+    // Therefore, after reading the 4-byte candidate length we peek at the very
+    // next byte: Ultralytics JSON always starts with '{' (0x7B).  Only if that
+    // byte is '{' do we treat this as Ultralytics format.
     int32_t metadata_length = 0;
     file.read(reinterpret_cast<char *>(&metadata_length), sizeof(int32_t));
 
     size_t model_offset = 0;
     size_t model_size = total_file_size;
 
-    // If metadata_length is reasonable (> 0 and < 100KB), skip the metadata
+    bool is_ultralytics_format = false;
     if (metadata_length > 0 && metadata_length < 102400)
     {
-        // This looks like Ultralytics format with metadata
+        // Peek at the first byte of the alleged JSON block
+        char first_json_byte = 0;
+        file.read(&first_json_byte, 1);
+        if (first_json_byte == '{')
+        {
+            is_ultralytics_format = true;
+        }
+    }
+
+    if (is_ultralytics_format)
+    {
+        // Ultralytics format: skip 4-byte length field + JSON metadata
         model_offset = sizeof(int32_t) + metadata_length;
         model_size = total_file_size - model_offset;
         file.seekg(model_offset, std::ifstream::beg);
@@ -64,7 +84,7 @@ void BasicTRTHandler::initialize_handler()
     }
     else
     {
-        // No metadata or invalid format, read from beginning
+        // Raw TRT engine or unrecognised format — read from the beginning
         file.seekg(0, std::ifstream::beg);
     }
 
