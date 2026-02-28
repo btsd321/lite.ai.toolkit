@@ -33,13 +33,19 @@ execute_process(COMMAND sh -c "nm -D libnvinfer.so | grep tensorrt_version"
 string(STRIP ${curr_out} TensorRT_Version)
 set(TensorRT_Version ${TensorRT_Version} CACHE STRING "TensorRT version" FORCE)
 
+# IMPORTANT: TensorRT_DIR/include MUST come before CUDA_DIR/include.
+# /usr/local/cuda/include may contain stale TRT headers (e.g. NvInferRuntime.h
+# from a different TRT patch version bundled with CUDA). If those headers are
+# picked up at compile time but TensorRT_DIR's .so is loaded at runtime, the
+# virtual-function-table offsets (e.g. getNbIOTensors) will mismatch and cause
+# a SIGSEGV at the first virtual call after deserializeCudaEngine().
+include_directories(BEFORE ${TensorRT_DIR}/include)
+link_directories(${TensorRT_DIR}/lib)
+
 include_directories(${CUDA_DIR}/include)
 link_directories(${CUDA_DIR}/lib64)
 # Add WSL CUDA library path
 link_directories(/usr/lib/wsl/lib)
-
-include_directories(${TensorRT_DIR}/include)
-link_directories(${TensorRT_DIR}/lib)
 
 # 1. glob sources files
 file(GLOB TENSORRT_CORE_SRCS ${CMAKE_SOURCE_DIR}/lite/trt/core/*.cpp)
