@@ -45,7 +45,8 @@ option(ENABLE_TNN "enable TNN engine" OFF)
 option(ENABLE_ONNXRUNTIME_CUDA "enable ONNXRuntime engine with CUDA provider" OFF) # for future use
 option(ENABLE_OPENCV_VIDEOIO "enable opencv videoio modules for detect_video apis" ON) # now, ON only
 
-# Set TensorRT and CUDA paths
+# Set OnnxRuntime, TensorRT and CUDA paths
+set(OnnxRuntime_DIR "" CACHE PATH "OnnxRuntime installation directory (leave empty to auto-download to third_party/)")
 set(TensorRT_DIR "/usr" CACHE PATH "TensorRT installation directory")
 set(CUDA_DIR "/usr/local/cuda" CACHE PATH "CUDA installation directory")
 
@@ -68,9 +69,8 @@ install(TARGETS lite.ai.toolkit LIBRARY DESTINATION lib)
 
 # Install all third-party libraries to lib directory
 if(ENABLE_ONNXRUNTIME)
-  # Only install if ONNXRuntime is not in system paths
-  if(ONNXRUNTIME_INSTALL_DIR MATCHES "^/usr(/local)?(/|$)")
-    message(STATUS "Skip installing onnxruntime libraries (using system installation at ${ONNXRUNTIME_INSTALL_DIR})")
+  if(ONNXRUNTIME_USER_PROVIDED)
+    message(STATUS "Skip installing onnxruntime libraries (using user-provided installation at ${ONNXRUNTIME_INSTALL_DIR})")
   else()
     file(GLOB ONNXRUNTIME_LIBS "${ONNXRUNTIME_INSTALL_DIR}/lib/*.so*")
     install(FILES ${ONNXRUNTIME_LIBS} DESTINATION lib)
@@ -92,9 +92,8 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/lite
 
 # Install third-party headers (only if not system-installed)
 if(ENABLE_ONNXRUNTIME)
-  # Only install if ONNXRuntime is not in system paths
-  if(ONNXRUNTIME_INSTALL_DIR MATCHES "^/usr(/local)?(/|$)")
-    message(STATUS "Skip installing onnxruntime headers (using system installation at ${ONNXRUNTIME_INSTALL_DIR})")
+  if(ONNXRUNTIME_USER_PROVIDED)
+    message(STATUS "Skip installing onnxruntime headers (using user-provided installation at ${ONNXRUNTIME_INSTALL_DIR})")
   else()
     install(DIRECTORY ${ONNXRUNTIME_INSTALL_DIR}/include/
             DESTINATION ${CMAKE_INSTALL_PREFIX}/include/onnxruntime

@@ -1,24 +1,51 @@
 set(OnnxRuntime_Version "1.17.1" CACHE STRING "OnnxRuntime version" FORCE)
-set(OnnxRuntime_DIR ${THIRD_PARTY_PATH}/onnxruntime)
-# download from github if OnnxRuntime include dir is not exists (handles incomplete installations)
-if (NOT EXISTS ${OnnxRuntime_DIR}/include)
-    if (EXISTS ${OnnxRuntime_DIR})
-        message("[Lite.AI.Toolkit][W] Found incomplete onnxruntime dir (missing include/), removing and re-downloading ...")
-        file(REMOVE_RECURSE ${OnnxRuntime_DIR})
+# Detect onnxruntime from user-provided OnnxRuntime_DIR.
+# Supports two layout styles:
+#   1. Package style  (downloaded tgz): <DIR>/include/onnxruntime_cxx_api.h  -> include_dir = <DIR>/include
+#   2. System prefix style:             <DIR>/include/onnxruntime/onnxruntime_cxx_api.h -> include_dir = <DIR>/include/onnxruntime
+set(_ORT_FOUND FALSE)
+if (OnnxRuntime_DIR)
+    if (EXISTS "${OnnxRuntime_DIR}/include/onnxruntime_cxx_api.h")
+        # Package style
+        set(_ORT_INCLUDE_DIR "${OnnxRuntime_DIR}/include")
+        set(_ORT_LIB_DIR     "${OnnxRuntime_DIR}/lib")
+        set(_ORT_FOUND TRUE)
+        message("[Lite.AI.Toolkit][I] Using user-provided onnxruntime (package style): ${OnnxRuntime_DIR}")
+    elseif (EXISTS "${OnnxRuntime_DIR}/include/onnxruntime/onnxruntime_cxx_api.h")
+        # System prefix style
+        set(_ORT_INCLUDE_DIR "${OnnxRuntime_DIR}/include/onnxruntime")
+        set(_ORT_LIB_DIR     "${OnnxRuntime_DIR}/lib")
+        set(_ORT_FOUND TRUE)
+        message("[Lite.AI.Toolkit][I] Using user-provided onnxruntime (system prefix style): ${OnnxRuntime_DIR}")
+    else()
+        message("[Lite.AI.Toolkit][W] OnnxRuntime_DIR=${OnnxRuntime_DIR} does not contain a valid onnxruntime installation, falling back to third_party auto-download.")
     endif()
-    set(OnnxRuntime_Filename "onnxruntime-linux-x64-${OnnxRuntime_Version}.tgz")
-    set(OnnxRuntime_URL https://ghfast.top/https://github.com/microsoft/onnxruntime/releases/download/v1.17.1/${OnnxRuntime_Filename})
-    message("[Lite.AI.Toolkit][I] Downloading onnxruntime library: ${OnnxRuntime_URL}")
-    download_and_decompress(${OnnxRuntime_URL} ${OnnxRuntime_Filename} ${OnnxRuntime_DIR})
-else()
-    message("[Lite.AI.Toolkit][I] Found local onnxruntime library: ${OnnxRuntime_DIR}")
 endif()
 
-if(NOT EXISTS ${OnnxRuntime_DIR})
-    message(FATAL_ERROR "[Lite.AI.Toolkit][E] ${OnnxRuntime_DIR} is not exists!")
+if (NOT _ORT_FOUND)
+    # Fall back to third_party directory with auto-download
+    set(OnnxRuntime_DIR ${THIRD_PARTY_PATH}/onnxruntime)
+    if (NOT EXISTS ${OnnxRuntime_DIR}/include)
+        if (EXISTS ${OnnxRuntime_DIR})
+            message("[Lite.AI.Toolkit][W] Found incomplete onnxruntime dir (missing include/), removing and re-downloading ...")
+            file(REMOVE_RECURSE ${OnnxRuntime_DIR})
+        endif()
+        set(OnnxRuntime_Filename "onnxruntime-linux-x64-${OnnxRuntime_Version}.tgz")
+        set(OnnxRuntime_URL https://ghfast.top/https://github.com/microsoft/onnxruntime/releases/download/v1.17.1/${OnnxRuntime_Filename})
+        message("[Lite.AI.Toolkit][I] Downloading onnxruntime library: ${OnnxRuntime_URL}")
+        download_and_decompress(${OnnxRuntime_URL} ${OnnxRuntime_Filename} ${OnnxRuntime_DIR})
+    else()
+        message("[Lite.AI.Toolkit][I] Found local onnxruntime library: ${OnnxRuntime_DIR}")
+    endif()
+    set(_ORT_INCLUDE_DIR "${OnnxRuntime_DIR}/include")
+    set(_ORT_LIB_DIR     "${OnnxRuntime_DIR}/lib")
 endif()
-include_directories(${OnnxRuntime_DIR}/include)
-link_directories(${OnnxRuntime_DIR}/lib)
+
+if(NOT EXISTS ${_ORT_INCLUDE_DIR})
+    message(FATAL_ERROR "[Lite.AI.Toolkit][E] onnxruntime include dir not found: ${_ORT_INCLUDE_DIR}")
+endif()
+include_directories(${_ORT_INCLUDE_DIR})
+link_directories(${_ORT_LIB_DIR})
 
 # 1. glob sources files
 file(GLOB ONNXRUNTIME_CORE_SRCS ${CMAKE_SOURCE_DIR}/lite/ort/core/*.cpp)
@@ -41,3 +68,5 @@ set(ORT_HEADERS ${ONNXRUNTIME_CORE_HEAD} ${ONNXRUNTIME_CV_HEAD} ${ONNXRUNTIME_AS
 
 # Export variables for installation
 set(ONNXRUNTIME_INSTALL_DIR ${OnnxRuntime_DIR} PARENT_SCOPE)
+# If onnxruntime was found from a user-provided directory, skip re-installing
+set(ONNXRUNTIME_USER_PROVIDED ${_ORT_FOUND} PARENT_SCOPE)
