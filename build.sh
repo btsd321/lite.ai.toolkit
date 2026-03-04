@@ -23,8 +23,8 @@ if [ "$1" == "tensorrt" ]; then
            -DENABLE_TENSORRT=ON \
            -DCUDA_DIR=/usr/local/cuda-12.9 \
            -DOpenCV_DIR=/eibot/environment/waybill_perception_cpp_env/lib/cmake/opencv4 \
-           -DTensorRT_DIR=/usr \
-           -DENABLE_TEST=ON
+           -DTensorRT_DIR=/eibot/environment/waybill_perception_cpp_env/TensorRT-10.13.3.9 \
+           -DENABLE_TEST=OFF
 
 else
   cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -33,7 +33,7 @@ else
            -DENABLE_TEST=ON
 fi
 
-make -j16
+make -j16 || { echo "Build failed, skipping install."; exit 1; }
 sudo make install
 
 # bash ./build.sh
