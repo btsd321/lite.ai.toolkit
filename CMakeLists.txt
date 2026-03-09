@@ -131,7 +131,7 @@ if(NOT TARGET uninstall)
 endif()
 
 if (ENABLE_TEST)
-    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_INSTALL_PREFIX}/bin)
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
     add_subdirectory(examples/lite)
     # if ((UNIX AND NOT APPLE))
     #     file(GLOB_RECURSE ALL_THIRD_LIBS ${THIRD_PARTY_PATH} FOLLOW_SYMLINKS *.so*)
