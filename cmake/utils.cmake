@@ -45,7 +45,7 @@ function(add_lite_ai_toolkit_shared_library version soversion)
     if (ENABLE_ONNXRUNTIME)
         include(cmake/onnxruntime.cmake)
         set(LITE_SRCS ${LITE_SRCS} ${ORT_SRCS})
-        set(LITE_DEPENDENCIES ${LITE_DEPENDENCIES} onnxruntime ddim_scheduler_cpp)
+        set(LITE_DEPENDENCIES ${LITE_DEPENDENCIES} ${_ORT_LINK_LIBS} ddim_scheduler_cpp)
         link_directories(${CMAKE_SOURCE_DIR}/lite/bin)
     endif ()
 

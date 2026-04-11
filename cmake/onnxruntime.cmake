@@ -47,6 +47,18 @@ endif()
 include_directories(${_ORT_INCLUDE_DIR})
 link_directories(${_ORT_LIB_DIR})
 
+# Determine the correct link target.
+# vcpkg installs onnxruntime as split static libs with a CMake INTERFACE target;
+# there is NO libonnxruntime.so. Detect this case via the cmake config file
+# and use onnxruntime::onnxruntime instead of the bare '-lonnxruntime'.
+if (EXISTS "${OnnxRuntime_DIR}/share/onnxruntime/onnxruntimeConfig.cmake")
+    find_package(onnxruntime CONFIG REQUIRED HINTS "${OnnxRuntime_DIR}")
+    set(_ORT_LINK_LIBS onnxruntime::onnxruntime)
+    message("[Lite.AI.Toolkit][I] Using CMake target 'onnxruntime::onnxruntime' (vcpkg/cmake-config style)")
+else()
+    set(_ORT_LINK_LIBS onnxruntime)
+endif()
+
 # 1. glob sources files
 file(GLOB ONNXRUNTIME_CORE_SRCS ${CMAKE_SOURCE_DIR}/lite/ort/core/*.cpp)
 file(GLOB ONNXRUNTIME_CV_SRCS ${CMAKE_SOURCE_DIR}/lite/ort/cv/*.cpp)
