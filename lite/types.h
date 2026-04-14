@@ -265,6 +265,16 @@ namespace lite
             FaceParsingContentType() : flag(false) {};
         } FaceParsingContent;
 
+        // Instance segmentation result: bounding box + per-instance binary mask
+        typedef struct LITE_EXPORTS BoxfWithSegMaskType
+        {
+            Boxf box;      // bounding box in original image coordinates
+            cv::Mat mask;  // binary mask (CV_32FC1, values 0 or 1), same size as original image
+            bool flag;
+
+            BoxfWithSegMaskType() : flag(false) {};
+        } BoxfWithSegMask;
+
         // alias
         typedef SegmentationMaskContent HairSegContent;
         typedef SegmentationMaskContent HeadSegContent;

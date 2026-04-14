@@ -144,8 +144,7 @@ void lite::utils::draw_boxes_inplace(cv::Mat &mat_inplace, const std::vector<typ
   }
 }
 
-void lite::utils::draw_boxes_with_angle_inplace(cv::Mat &mat_inplace, const std::vector<types::BoxfWithAngle> &boxes)
-{
+void lite::utils::draw_boxes_with_angle_inplace(cv::Mat &mat_inplace, const std::vector<types::BoxfWithAngle> &boxes){
   if (boxes.empty()) return;
   for (const auto &box: boxes)
   {
@@ -190,6 +189,66 @@ cv::Mat lite::utils::draw_boxes_with_angle(const cv::Mat &mat, const std::vector
   draw_boxes_with_angle_inplace(mat_copy, boxes);
   return mat_copy;
 }
+
+void lite::utils::draw_seg_masks_inplace(cv::Mat &mat_inplace, const std::vector<types::BoxfWithSegMask> &objects, float mask_alpha)
+{
+  if (objects.empty()) return;
+  // Pre-defined colors for up to 80 categories
+  static const cv::Scalar palette[] = {
+    {255,56,56},{255,157,151},{255,112,31},{255,178,29},{207,210,49},
+    {72,249,10},{146,204,23},{61,219,134},{26,147,52},{0,212,187},
+    {44,153,168},{0,194,255},{52,69,147},{100,115,255},{0,24,236},
+    {132,56,255},{82,0,133},{203,56,255},{255,149,200},{255,55,199}
+  };
+  const int n_colors = sizeof(palette) / sizeof(palette[0]);
+
+  for (unsigned int i = 0; i < objects.size(); ++i)
+  {
+    const auto &obj = objects[i];
+    if (!obj.flag || obj.mask.empty()) continue;
+
+    cv::Scalar color = palette[obj.box.label % n_colors];
+
+    // Blend mask onto image
+    cv::Mat mask_u8;
+    obj.mask.convertTo(mask_u8, CV_8UC1, 255.f);
+    cv::Mat colored_mask(mat_inplace.size(), CV_8UC3, color);
+    cv::Mat roi_mask;
+    cv::cvtColor(mask_u8, roi_mask, cv::COLOR_GRAY2BGR);
+
+    // Apply alpha blend where mask > 0
+    for (int y = 0; y < mat_inplace.rows; ++y)
+    {
+      for (int x = 0; x < mat_inplace.cols; ++x)
+      {
+        if (mask_u8.at<uchar>(y, x) > 0)
+        {
+          cv::Vec3b &pixel = mat_inplace.at<cv::Vec3b>(y, x);
+          pixel[0] = cv::saturate_cast<uchar>(pixel[0] * (1.f - mask_alpha) + color[0] * mask_alpha);
+          pixel[1] = cv::saturate_cast<uchar>(pixel[1] * (1.f - mask_alpha) + color[1] * mask_alpha);
+          pixel[2] = cv::saturate_cast<uchar>(pixel[2] * (1.f - mask_alpha) + color[2] * mask_alpha);
+        }
+      }
+    }
+
+    // Draw bounding box and label
+    cv::rectangle(mat_inplace,
+                  cv::Rect((int)obj.box.x1, (int)obj.box.y1,
+                           (int)(obj.box.x2 - obj.box.x1),
+                           (int)(obj.box.y2 - obj.box.y1)),
+                  color, 2);
+    if (obj.box.label_text)
+    {
+      std::string label = std::string(obj.box.label_text) + ":" +
+                          std::to_string(obj.box.score).substr(0, 4);
+      cv::putText(mat_inplace, label,
+                  cv::Point((int)obj.box.x1, (int)obj.box.y1 - 4),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.6f, color, 2);
+    }
+  }
+}
+
+
 
 void lite::utils::draw_boxes_with_landmarks_inplace(cv::Mat &mat_inplace, const std::vector<types::BoxfWithLandmarks> &boxes_kps, bool text)
 {

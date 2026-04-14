@@ -112,6 +112,7 @@
 #include "lite/ort/cv/yolov6.h"
 #include "lite/ort/cv/yolo12.h"
 #include "lite/ort/cv/yolo26_obb.h"
+#include "lite/ort/cv/yolov8seg.h"
 #include "lite/ort/cv/face_parsing_bisenet.h"
 #include "lite/ort/cv/face_parsing_bisenet_dyn.h"
 #include "lite/ort/cv/yolofacev8.h"
@@ -143,6 +144,7 @@
 #include "lite/trt/cv/trt_yolo12.h"
 #include "lite/trt/cv/trt_yolo26_obb.h"
 #include "lite/trt/cv/trt_yolov11.h"
+#include "lite/trt/cv/trt_yolov8seg.h"
 #include "lite/trt/cv/trt_modnet.h"
 #include "lite/trt/cv/trt_yolov5_blazeface.h"
 #include "lite/trt/cv/trt_lightenhance.h"
@@ -518,6 +520,7 @@ namespace lite
             typedef ortcv::YOLOv6 _ONNXYOLOv6;
             typedef ortcv::YOLO12 _ONNXYOLO12;
             typedef ortcv::YOLO26OBB _ONNXYOLO26OBB;
+            typedef ortcv::YOLOv8Seg _ONNXYOLOv8Seg;
             typedef ortcv::FaceParsingBiSeNet _ONNXFaceParsingBiSeNet;
             typedef ortcv::FaceParsingBiSeNetDyn _ONNXFaceParsingBiSeNetDyn;
             typedef ortcv::YoloFaceV8 _ONNXYOLOFaceNet;
@@ -684,6 +687,11 @@ namespace lite
                 typedef _ONNXFaceParsingBiSeNet FaceParsingBiSeNet;
                 typedef _ONNXFaceParsingBiSeNetDyn FaceParsingBiSeNetDyn;
             }
+            // 5b. instance segmentation
+            namespace instance_segmentation
+            {
+                typedef _ONNXYOLOv8Seg YOLOv8Seg;
+            }
             // 6. reid
             namespace reid
             {
@@ -783,6 +791,7 @@ namespace lite
             typedef trtcv::TRTYOLO12 _TRT_YOLO12;
             typedef trtcv::TRTYOLOV11 _TRT_YOLOV11;
             typedef trtcv::TRTYOLO5Face _TRT_YOLO5Face;
+            typedef trtcv::TRTYoloV8Seg _TRT_YOLOv8Seg;
             typedef trtcv::TRTLightEnhance _TRT_LightEnhance;
             typedef trtcv::TRTRealESRGAN _TRT_RealESRGAN;
             typedef trtcv::TRTMODNet _TRT_MODNet;
@@ -809,6 +818,10 @@ namespace lite
                 typedef _TRT_YOLOv6 YOLOV6;
                 typedef _TRT_YOLO12 YOLO12;
                 typedef _TRT_YOLOV11 YOLOV11;
+            }
+            namespace instance_segmentation
+            {
+                typedef _TRT_YOLOv8Seg YOLOV8Seg;
             }
             namespace face
             {
