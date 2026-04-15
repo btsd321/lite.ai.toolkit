@@ -63,8 +63,9 @@ endif()
 
 # --- ONNXRuntime ---
 if(_LITE_AI_ENABLE_ONNXRUNTIME)
+  find_dependency(onnxruntime CONFIG)
   list(APPEND Lite_AI_INCLUDE_DIRS "${_LITE_AI_PREFIX}/include/onnxruntime")
-  list(APPEND Lite_AI_LIBS onnxruntime)
+  list(APPEND Lite_AI_LIBS onnxruntime::onnxruntime)
 endif()
 
 # --- MNN（内嵌第三方）---
@@ -106,9 +107,11 @@ if(_LITE_AI_ENABLE_TENSORRT)
   list(APPEND Lite_AI_INCLUDE_DIRS "${_LITE_AI_CUDA_DIR}/include")
   list(APPEND Lite_AI_LIBS_DIRS    "${_LITE_AI_TENSORRT_DIR}/lib")
 
+  # 使用 CUDAToolkit imported targets 代替裸库名，避免链接路径问题
+  find_dependency(CUDAToolkit)
   # 使用绝对路径避免链接到系统中其他版本的 TensorRT（如 CUDA 目录下的 libnvinfer.so.8）
   list(APPEND Lite_AI_LIBS
-    cuda cudart
+    CUDA::cuda_driver CUDA::cudart
     "${_LITE_AI_TENSORRT_DIR}/lib/libnvinfer.so"
     "${_LITE_AI_TENSORRT_DIR}/lib/libnvonnxparser.so"
     "${_LITE_AI_TENSORRT_DIR}/lib/libnvinfer_plugin.so"
