@@ -1,103 +1,132 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.8)
+# lite.ai.toolkit 依赖路径解析
+#
+# 由 lite.ai.toolkit-config.cmake 引入，负责查找传递依赖并收集路径变量。
+# 不直接创建目标（目标由 -config.cmake 创建），不污染全局作用域。
+#
+# 输出变量（供 -config.cmake 设置 IMPORTED target 属性）：
+#   LITE_AI_LIB_DIR        — 主库 .so 所在目录
+#   Lite_AI_INCLUDE_DIRS   — 所有头文件搜索路径
+#   Lite_AI_LIBS_DIRS      — 所有库文件搜索路径
+#   Lite_AI_LIBS           — 所有需链接的库名称/路径
 
-set(ENABLE_ONNXRUNTIME @ENABLE_ONNXRUNTIME@)
-set(ENABLE_MNN @ENABLE_MNN@)
-set(ENABLE_NCNN @ENABLE_NCNN@)
-set(ENABLE_TNN @ENABLE_TNN@)
-set(ENABLE_TENSORRT @ENABLE_TENSORRT@)
-set(CUDA_DIR @CUDA_DIR@)
-set(TensorRT_DIR @TensorRT_DIR@)
+cmake_minimum_required(VERSION 3.12)
+include_guard(GLOBAL)
 
-# system and backend check
-if (NOT (UNIX AND NOT APPLE))
-  message(FATAL_ERROR "lite.ai.toolkit>=0.2 not support for windows/mac now!")
+# ===== 构建时特性标志（由 configure_file 替换）=====
+set(_LITE_AI_ENABLE_ONNXRUNTIME @ENABLE_ONNXRUNTIME@)
+set(_LITE_AI_ENABLE_MNN        @ENABLE_MNN@)
+set(_LITE_AI_ENABLE_NCNN       @ENABLE_NCNN@)
+set(_LITE_AI_ENABLE_TNN        @ENABLE_TNN@)
+set(_LITE_AI_ENABLE_TENSORRT   @ENABLE_TENSORRT@)
+set(_LITE_AI_CUDA_DIR          "@CUDA_DIR@")
+set(_LITE_AI_TENSORRT_DIR      "@TensorRT_DIR@")
+
+# ===== 平台校验 =====
+if(NOT (UNIX AND NOT APPLE))
+  message(FATAL_ERROR "lite.ai.toolkit >= 0.2 仅支持 Linux")
 endif()
 
-if ((NOT ENABLE_ONNXRUNTIME) AND (NOT ENABLE_MNN))
-    message(FATAL_ERROR "One of ONNXRuntime/MNN Backend must be enable!")
+if(NOT _LITE_AI_ENABLE_ONNXRUNTIME AND NOT _LITE_AI_ENABLE_MNN)
+  message(FATAL_ERROR "至少需要启用 ONNXRuntime 或 MNN 后端之一")
 endif()
 
-# lite.ai.toolkit 
-# Get the directory of this config file (lib/cmake/lite.ai.toolkit)
-get_filename_component(LITE_AI_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
-# Navigate up to the installation root: lib/cmake/lite.ai.toolkit -> lib/cmake -> lib -> root
-get_filename_component(LITE_AI_INSTALL_PREFIX "${LITE_AI_CMAKE_DIR}/../../.." ABSOLUTE)
+# ===== 安装前缀推导 =====
+# 从 config 文件位置向上推导到安装根目录
+# 标准布局：lib/cmake/lite.ai.toolkit/ → 向上 3 层
+# vcpkg 布局：share/lite.ai.toolkit/   → 向上 2 层（由 portfile 修补）
+get_filename_component(_LITE_AI_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+get_filename_component(_LITE_AI_PREFIX "${_LITE_AI_CMAKE_DIR}/../../.." ABSOLUTE)
 
-set(LITE_AI_INCLUDE_DIR ${LITE_AI_INSTALL_PREFIX}/include)
-set(THIRD_PARTY_PATH ${LITE_AI_INSTALL_PREFIX}/third_party)
-set(LITE_AI_LIB_DIR ${LITE_AI_INSTALL_PREFIX}/lib)
+set(LITE_AI_LIB_DIR "${_LITE_AI_PREFIX}/lib")
 
-set(Lite_AI_INCLUDE_DIRS ${LITE_AI_INCLUDE_DIR})
-set(Lite_AI_LIBS_DIRS ${LITE_AI_LIB_DIR})
-set(Lite_AI_LIBS lite.ai.toolkit)
+# ===== 收集路径变量 =====
+set(Lite_AI_INCLUDE_DIRS "${_LITE_AI_PREFIX}/include")
+set(Lite_AI_LIBS_DIRS    "${LITE_AI_LIB_DIR}")
+set(Lite_AI_LIBS         lite.ai.toolkit)
 
-include_directories(${LITE_AI_INCLUDE_DIR})
-link_directories(${LITE_AI_LIB_DIR})
+# ===== 传递依赖 =====
+include(CMakeFindDependencyMacro)
 
-# opencv
-include_directories(${THIRD_PARTY_PATH}/opencv/include/opencv4)
-link_directories(${THIRD_PARTY_PATH}/opencv/lib)
-list(APPEND Lite_AI_INCLUDE_DIRS ${THIRD_PARTY_PATH}/opencv/include/opencv4)
-list(APPEND Lite_AI_LIBS_DIRS ${THIRD_PARTY_PATH}/opencv/lib)
-set(OpenCV_LIBS opencv_core opencv_imgcodecs opencv_imgproc opencv_video opencv_videoio) # linux only
-list(APPEND Lite_AI_LIBS ${OpenCV_LIBS})
+# --- OpenCV ---
+# 优先 find_dependency（vcpkg / 系统安装均可），fallback 到内嵌 third_party/
+find_dependency(OpenCV COMPONENTS core imgcodecs imgproc video videoio)
+if(OpenCV_FOUND)
+  list(APPEND Lite_AI_INCLUDE_DIRS ${OpenCV_INCLUDE_DIRS})
+  list(APPEND Lite_AI_LIBS ${OpenCV_LIBS})
+else()
+  set(_lite_ai_tp "${_LITE_AI_PREFIX}/third_party")
+  list(APPEND Lite_AI_INCLUDE_DIRS "${_lite_ai_tp}/opencv/include/opencv4")
+  list(APPEND Lite_AI_LIBS_DIRS    "${_lite_ai_tp}/opencv/lib")
+  list(APPEND Lite_AI_LIBS opencv_core opencv_imgcodecs opencv_imgproc opencv_video opencv_videoio)
+  unset(_lite_ai_tp)
+endif()
 
-# onnxruntime
-if (ENABLE_ONNXRUNTIME)
-  include_directories(${LITE_AI_INCLUDE_DIR}/onnxruntime)
-  link_directories(${LITE_AI_LIB_DIR})
-  list(APPEND Lite_AI_INCLUDE_DIRS ${LITE_AI_INCLUDE_DIR}/onnxruntime)
-  list(APPEND Lite_AI_LIBS_DIRS ${LITE_AI_LIB_DIR})
+# --- ONNXRuntime ---
+if(_LITE_AI_ENABLE_ONNXRUNTIME)
+  list(APPEND Lite_AI_INCLUDE_DIRS "${_LITE_AI_PREFIX}/include/onnxruntime")
   list(APPEND Lite_AI_LIBS onnxruntime)
 endif()
 
-# MNN
-if (ENABLE_MNN)
-  include_directories(${THIRD_PARTY_PATH}/MNN/include)
-  link_directories(${THIRD_PARTY_PATH}/MNN/lib)
-  list(APPEND Lite_AI_INCLUDE_DIRS ${THIRD_PARTY_PATH}/MNN/include)
-  list(APPEND Lite_AI_LIBS_DIRS ${THIRD_PARTY_PATH}/MNN/lib)
+# --- MNN（内嵌第三方）---
+if(_LITE_AI_ENABLE_MNN)
+  set(_lite_ai_tp "${_LITE_AI_PREFIX}/third_party")
+  list(APPEND Lite_AI_INCLUDE_DIRS "${_lite_ai_tp}/MNN/include")
+  list(APPEND Lite_AI_LIBS_DIRS    "${_lite_ai_tp}/MNN/lib")
   list(APPEND Lite_AI_LIBS MNN)
+  unset(_lite_ai_tp)
 endif()
 
-# TNN
-if (ENABLE_TNN)
-  include_directories(${THIRD_PARTY_PATH}/TNN/include)
-  link_directories(${THIRD_PARTY_PATH}/TNN/lib)
-  list(APPEND Lite_AI_INCLUDE_DIRS ${THIRD_PARTY_PATH}/TNN/include)
-  list(APPEND Lite_AI_LIBS_DIRS ${THIRD_PARTY_PATH}/TNN/lib)
+# --- TNN（内嵌第三方）---
+if(_LITE_AI_ENABLE_TNN)
+  set(_lite_ai_tp "${_LITE_AI_PREFIX}/third_party")
+  list(APPEND Lite_AI_INCLUDE_DIRS "${_lite_ai_tp}/TNN/include")
+  list(APPEND Lite_AI_LIBS_DIRS    "${_lite_ai_tp}/TNN/lib")
   list(APPEND Lite_AI_LIBS TNN)
+  unset(_lite_ai_tp)
 endif()
 
-# ncnn
-if (ENABLE_NCNN)
-  include_directories(${THIRD_PARTY_PATH}/ncnn/include)
-  link_directories(${THIRD_PARTY_PATH}/ncnn/lib)
-  list(APPEND Lite_AI_INCLUDE_DIRS ${THIRD_PARTY_PATH}/ncnn/include)
-  list(APPEND Lite_AI_LIBS_DIRS ${THIRD_PARTY_PATH}/ncnn/lib)
+# --- ncnn（内嵌第三方）---
+if(_LITE_AI_ENABLE_NCNN)
+  set(_lite_ai_tp "${_LITE_AI_PREFIX}/third_party")
+  list(APPEND Lite_AI_INCLUDE_DIRS "${_lite_ai_tp}/ncnn/include")
+  list(APPEND Lite_AI_LIBS_DIRS    "${_lite_ai_tp}/ncnn/lib")
   list(APPEND Lite_AI_LIBS ncnn)
+  unset(_lite_ai_tp)
 endif()
 
-# tensorrt
-if (ENABLE_TENSORRT)
-  # Check if TensorRT headers were installed with lite.ai.toolkit
-  if(EXISTS ${LITE_AI_INCLUDE_DIR}/tensorrt)
-    include_directories(${LITE_AI_INCLUDE_DIR}/tensorrt)
-    list(APPEND Lite_AI_INCLUDE_DIRS ${LITE_AI_INCLUDE_DIR}/tensorrt)
+# --- TensorRT + CUDA ---
+if(_LITE_AI_ENABLE_TENSORRT)
+  # TensorRT 头文件：优先使用随库安装的，否则用构建时记录的系统路径
+  if(EXISTS "${_LITE_AI_PREFIX}/include/tensorrt")
+    list(APPEND Lite_AI_INCLUDE_DIRS "${_LITE_AI_PREFIX}/include/tensorrt")
   else()
-    # Use system TensorRT
-    include_directories(${TensorRT_DIR}/include)
-    list(APPEND Lite_AI_INCLUDE_DIRS ${TensorRT_DIR}/include)
+    list(APPEND Lite_AI_INCLUDE_DIRS "${_LITE_AI_TENSORRT_DIR}/include")
   endif()
-  
-  include_directories(${CUDA_DIR}/include)
-  link_directories(${CUDA_DIR}/lib64)
-  link_directories(${TensorRT_DIR}/lib)
-  list(APPEND Lite_AI_LIBS_DIRS ${TensorRT_DIR}/lib)
-  # Use full paths to avoid picking up wrong TensorRT version from system (e.g. libnvinfer.so.8 in CUDA dirs)
-  list(APPEND Lite_AI_LIBS cuda cudart
-    ${TensorRT_DIR}/lib/libnvinfer.so
-    ${TensorRT_DIR}/lib/libnvonnxparser.so
-    ${TensorRT_DIR}/lib/libnvinfer_plugin.so
+
+  list(APPEND Lite_AI_INCLUDE_DIRS "${_LITE_AI_CUDA_DIR}/include")
+  list(APPEND Lite_AI_LIBS_DIRS    "${_LITE_AI_TENSORRT_DIR}/lib")
+
+  # 使用绝对路径避免链接到系统中其他版本的 TensorRT（如 CUDA 目录下的 libnvinfer.so.8）
+  list(APPEND Lite_AI_LIBS
+    cuda cudart
+    "${_LITE_AI_TENSORRT_DIR}/lib/libnvinfer.so"
+    "${_LITE_AI_TENSORRT_DIR}/lib/libnvonnxparser.so"
+    "${_LITE_AI_TENSORRT_DIR}/lib/libnvinfer_plugin.so"
   )
 endif()
+
+# ===== 旧式变量兼容（已弃用，建议使用 lite.ai.toolkit::lite.ai.toolkit 目标）=====
+set(lite.ai.toolkit_INCLUDE_DIRS ${Lite_AI_INCLUDE_DIRS})
+set(lite.ai.toolkit_LIBS_DIRS    ${Lite_AI_LIBS_DIRS})
+set(lite.ai.toolkit_LIBS         ${Lite_AI_LIBS})
+
+# ===== 清理内部变量 =====
+unset(_LITE_AI_CMAKE_DIR)
+unset(_LITE_AI_PREFIX)
+unset(_LITE_AI_ENABLE_ONNXRUNTIME)
+unset(_LITE_AI_ENABLE_MNN)
+unset(_LITE_AI_ENABLE_NCNN)
+unset(_LITE_AI_ENABLE_TNN)
+unset(_LITE_AI_ENABLE_TENSORRT)
+unset(_LITE_AI_CUDA_DIR)
+unset(_LITE_AI_TENSORRT_DIR)
