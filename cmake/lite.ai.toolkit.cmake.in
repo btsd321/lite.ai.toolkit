@@ -63,7 +63,11 @@ endif()
 
 # --- ONNXRuntime ---
 if(_LITE_AI_ENABLE_ONNXRUNTIME)
-  find_dependency(onnxruntime CONFIG)
+  # 用 NOT TARGET 保护，避免与 cutie 等其他包重复调用 find_dependency(onnxruntime)
+  # 导致 onnxruntimeConfig.cmake 重复创建 safeint_interface 等 imported target
+  if(NOT TARGET onnxruntime::onnxruntime)
+    find_dependency(onnxruntime CONFIG)
+  endif()
   list(APPEND Lite_AI_INCLUDE_DIRS "${_LITE_AI_PREFIX}/include/onnxruntime")
   list(APPEND Lite_AI_LIBS onnxruntime::onnxruntime)
 endif()
