@@ -299,3 +299,147 @@ void TRTYoloV8Seg::detect(
         detected_objects.push_back(obj);
     }
 }
+
+// ==================== GPU Path ====================
+
+void TRTYoloV8Seg::ensure_gpu_components()
+{
+    if (!gpu_preprocessor_)
+    {
+        int model_h = static_cast<int>(input_node_dims[2]);
+        int model_w = static_cast<int>(input_node_dims[3]);
+        gpu_preprocessor_ = std::make_unique<trtgpu::GpuPreprocessor>(model_h, model_w, 114.f);
+    }
+    if (!gpu_mask_decoder_)
+    {
+        gpu_mask_decoder_ = std::make_unique<trtgpu::GpuMaskDecoder>(num_mask_coeffs, mask_threshold);
+    }
+}
+
+void TRTYoloV8Seg::detect_gpu(
+    const cv::Mat &mat,
+    std::vector<GpuSegDetection> &detected_objects,
+    float score_threshold, float iou_threshold,
+    unsigned int topk)
+{
+    if (mat.empty()) return;
+    ensure_gpu_components();
+
+    trtgpu::ScaleParams sp{};
+    gpu_preprocessor_->preprocess(mat, static_cast<float*>(buffers[0]),
+                                  sp, stream, /*bgr2rgb=*/true);
+
+    detect_gpu_impl(sp, mat.rows, mat.cols,
+                    detected_objects, score_threshold, iou_threshold, topk);
+}
+
+void TRTYoloV8Seg::detect_gpu(
+    const cv::cuda::GpuMat &gpu_mat,
+    int img_height, int img_width,
+    std::vector<GpuSegDetection> &detected_objects,
+    float score_threshold, float iou_threshold,
+    unsigned int topk)
+{
+    if (gpu_mat.empty()) return;
+    ensure_gpu_components();
+
+    trtgpu::ScaleParams sp{};
+    gpu_preprocessor_->preprocess(gpu_mat, static_cast<float*>(buffers[0]),
+                                  sp, stream, /*bgr2rgb=*/true);
+
+    detect_gpu_impl(sp, img_height, img_width,
+                    detected_objects, score_threshold, iou_threshold, topk);
+}
+
+void TRTYoloV8Seg::detect_gpu_impl(
+    const trtgpu::ScaleParams &sp,
+    int img_height, int img_width,
+    std::vector<GpuSegDetection> &detected_objects,
+    float score_threshold, float iou_threshold,
+    unsigned int topk)
+{
+    // 1. TRT 推理
+    cudaStreamSynchronize(stream);
+    bool status = trt_context->enqueueV3(stream);
+    cudaStreamSynchronize(stream);
+    if (!status)
+    {
+        std::cerr << "TRTYoloV8Seg: GPU inference failed" << std::endl;
+        return;
+    }
+
+    // 2. 只回传 det 输出（proto 留在 GPU 上）
+    auto det_dims = output_node_dims[0]; // (1, 116, 8400)
+    std::vector<float> det_output(det_dims[0] * det_dims[1] * det_dims[2]);
+    cudaMemcpyAsync(det_output.data(), buffers[1],
+                    det_output.size() * sizeof(float),
+                    cudaMemcpyDeviceToHost, stream);
+    cudaStreamSynchronize(stream);
+
+    // 3. ScaleParams → YOLOv8SegScaleParams 转换
+    YOLOv8SegScaleParams yolo_sp{};
+    yolo_sp.r = sp.ratio;
+    yolo_sp.dw = sp.pad_left;
+    yolo_sp.dh = sp.pad_top;
+    yolo_sp.new_unpad_w = sp.resized_w;
+    yolo_sp.new_unpad_h = sp.resized_h;
+    yolo_sp.flag = true;
+
+    // 4. CPU 解码 + NMS（复用已有方法）
+    std::vector<types::Boxf> bbox_collection;
+    std::vector<std::vector<float>> mask_coeffs_collection;
+    generate_detections(yolo_sp, bbox_collection, mask_coeffs_collection,
+                        det_output.data(), score_threshold, img_height, img_width);
+
+    std::vector<types::Boxf> nms_boxes;
+    std::vector<std::vector<float>> nms_coeffs;
+    this->nms(bbox_collection, nms_boxes, mask_coeffs_collection, nms_coeffs,
+              iou_threshold, topk);
+
+    if (nms_boxes.empty())
+    {
+        detected_objects.clear();
+        return;
+    }
+
+    // 5. 打包为 DetectionInfo
+    std::vector<trtgpu::DetectionInfo> det_infos(nms_boxes.size());
+    for (size_t i = 0; i < nms_boxes.size(); ++i)
+    {
+        det_infos[i].x1 = nms_boxes[i].x1;
+        det_infos[i].y1 = nms_boxes[i].y1;
+        det_infos[i].x2 = nms_boxes[i].x2;
+        det_infos[i].y2 = nms_boxes[i].y2;
+        det_infos[i].score = nms_boxes[i].score;
+        det_infos[i].label = nms_boxes[i].label;
+        det_infos[i].mask_coeffs = nms_coeffs[i];
+    }
+
+    // 6. GPU 批量 mask 解码（proto 零拷贝）
+    auto proto_dims = output_node_dims[1]; // (1, 32, 160, 160)
+    int proto_c = static_cast<int>(proto_dims[1]);
+    int proto_h = static_cast<int>(proto_dims[2]);
+    int proto_w = static_cast<int>(proto_dims[3]);
+    int input_h = static_cast<int>(input_node_dims[2]);
+    int input_w = static_cast<int>(input_node_dims[3]);
+
+    auto gpu_masks = gpu_mask_decoder_->decode(
+        static_cast<const float*>(buffers[2]),
+        proto_h, proto_w,
+        det_infos,
+        input_h, input_w,
+        sp.pad_left, sp.pad_top,
+        sp.resized_w, sp.resized_h,
+        img_height, img_width,
+        stream);
+
+    // 7. 组装结果
+    detected_objects.clear();
+    detected_objects.resize(nms_boxes.size());
+    for (size_t i = 0; i < nms_boxes.size(); ++i)
+    {
+        detected_objects[i].box = nms_boxes[i];
+        detected_objects[i].gpu_mask = std::move(gpu_masks[i]);
+        detected_objects[i].flag = true;
+    }
+}

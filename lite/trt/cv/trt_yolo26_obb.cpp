@@ -488,3 +488,121 @@ void TRTYOLO26OBB::detect(const cv::Mat &mat,
     std::cout << "TRTYOLO26OBB final detections: " << detected_boxes.size() << "\n";
 #endif
 }
+
+// ==================== GPU Path ====================
+
+void TRTYOLO26OBB::ensure_gpu_components()
+{
+    if (!gpu_preprocessor_)
+    {
+        int model_h = static_cast<int>(input_node_dims[2]);
+        int model_w = static_cast<int>(input_node_dims[3]);
+        gpu_preprocessor_ = std::make_unique<trtgpu::GpuPreprocessor>(model_h, model_w, 114.f);
+    }
+}
+
+void TRTYOLO26OBB::detect_gpu(
+    const cv::Mat &mat,
+    std::vector<types::BoxfWithAngle> &detected_boxes,
+    float score_threshold, float iou_threshold,
+    unsigned int topk)
+{
+    if (mat.empty()) return;
+    ensure_gpu_components();
+
+    trtgpu::ScaleParams sp{};
+    bool bgr2rgb = (input_format_ == ImageFormat::RGB);
+    gpu_preprocessor_->preprocess(mat, static_cast<float*>(buffers[0]),
+                                  sp, stream, bgr2rgb);
+
+    detect_gpu_impl(sp, mat.rows, mat.cols,
+                    detected_boxes, score_threshold, iou_threshold, topk);
+}
+
+void TRTYOLO26OBB::detect_gpu(
+    const cv::cuda::GpuMat &gpu_mat,
+    int img_height, int img_width,
+    std::vector<types::BoxfWithAngle> &detected_boxes,
+    float score_threshold, float iou_threshold,
+    unsigned int topk)
+{
+    if (gpu_mat.empty()) return;
+    ensure_gpu_components();
+
+    trtgpu::ScaleParams sp{};
+    bool bgr2rgb = (input_format_ == ImageFormat::RGB);
+    gpu_preprocessor_->preprocess(gpu_mat, static_cast<float*>(buffers[0]),
+                                  sp, stream, bgr2rgb);
+
+    detect_gpu_impl(sp, img_height, img_width,
+                    detected_boxes, score_threshold, iou_threshold, topk);
+}
+
+void TRTYOLO26OBB::detect_gpu_impl(
+    const trtgpu::ScaleParams &sp,
+    int img_height, int img_width,
+    std::vector<types::BoxfWithAngle> &detected_boxes,
+    float score_threshold, float iou_threshold,
+    unsigned int topk)
+{
+    if (output_node_dims.empty() || output_node_dims[0].empty())
+    {
+        std::cerr << "Error: TensorRT engine not properly initialized." << std::endl;
+        return;
+    }
+
+    // 1. TRT 推理
+    cudaStreamSynchronize(stream);
+    bool status = trt_context->enqueueV3(stream);
+    cudaStreamSynchronize(stream);
+    if (!status)
+    {
+        std::cerr << "TRTYOLO26OBB: GPU inference failed" << std::endl;
+        return;
+    }
+
+    // 2. D2H 输出
+    auto pred_dims = output_node_dims[0];
+    const unsigned int output_size = pred_dims[0] * pred_dims[1] * pred_dims[2];
+    std::vector<float> output(output_size);
+    cudaMemcpyAsync(output.data(), buffers[1],
+                    output_size * sizeof(float),
+                    cudaMemcpyDeviceToHost, stream);
+    cudaStreamSynchronize(stream);
+
+    // 3. ScaleParams → YOLO26OBBScaleParams
+    YOLO26OBBScaleParams yolo_sp{};
+    yolo_sp.r = sp.ratio;
+    yolo_sp.dw = sp.pad_left;
+    yolo_sp.dh = sp.pad_top;
+    yolo_sp.new_unpad_w = sp.resized_w;
+    yolo_sp.new_unpad_h = sp.resized_h;
+    yolo_sp.flag = true;
+
+    // 4. 后处理
+    detected_boxes.clear();
+
+    if (is_end2end_)
+    {
+        generate_bboxes_obb(yolo_sp, detected_boxes, output.data(),
+                            score_threshold, img_height, img_width);
+        if (detected_boxes.size() > topk)
+        {
+            std::sort(detected_boxes.begin(), detected_boxes.end(),
+                      [](const types::BoxfWithAngle &a, const types::BoxfWithAngle &b)
+                      { return a.score > b.score; });
+            detected_boxes.resize(topk);
+        }
+    }
+    else
+    {
+        std::vector<types::BoxfWithAngle> bbox_collection;
+        generate_bboxes_obb_non_end2end(yolo_sp, bbox_collection, output.data(),
+                                         score_threshold, img_height, img_width);
+        nms_obb(bbox_collection, detected_boxes, iou_threshold, topk);
+    }
+
+#if LITETRT_DEBUG
+    std::cout << "TRTYOLO26OBB GPU final detections: " << detected_boxes.size() << "\n";
+#endif
+}

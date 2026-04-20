@@ -7,9 +7,13 @@
 
 #include "lite/trt/core/trt_core.h"
 #include "lite/trt/core/trt_utils.h"
+#include "lite/trt/gpu/gpu_preprocess.h"
+#include "lite/trt/gpu/gpu_mask_decode.h"
 #include "lite/utils.h"
 #include <algorithm>
 #include <cmath>
+#include <memory>
+#include <opencv2/core/cuda.hpp>
 
 namespace trtcv
 {
@@ -92,6 +96,43 @@ namespace trtcv
                     float iou_threshold   = 0.45f,
                     unsigned int topk     = 100,
                     unsigned int nms_type = NMS::OFFSET);
+
+        /// GPU 推理结果：bbox + GPU 上的二值 mask
+        struct GpuSegDetection
+        {
+            types::Boxf box;
+            cv::cuda::GpuMat gpu_mask;  // CV_8UC1, 原图尺寸, 0/255
+            bool flag = false;
+        };
+
+        /// GPU 输入 + GPU mask 输出（cv::Mat 输入会自动上传）
+        void detect_gpu(const cv::Mat &mat,
+                        std::vector<GpuSegDetection> &detected_objects,
+                        float score_threshold = 0.25f,
+                        float iou_threshold   = 0.45f,
+                        unsigned int topk     = 100);
+
+        /// GPU 输入 + GPU mask 输出（零拷贝 GpuMat 输入）
+        void detect_gpu(const cv::cuda::GpuMat &gpu_mat,
+                        int img_height, int img_width,
+                        std::vector<GpuSegDetection> &detected_objects,
+                        float score_threshold = 0.25f,
+                        float iou_threshold   = 0.45f,
+                        unsigned int topk     = 100);
+
+    private:
+        /// detect_gpu 核心实现（预处理已完成，从 TRT 推理开始）
+        void detect_gpu_impl(const trtgpu::ScaleParams &scale_params,
+                             int img_height, int img_width,
+                             std::vector<GpuSegDetection> &detected_objects,
+                             float score_threshold, float iou_threshold,
+                             unsigned int topk);
+
+        /// 按需初始化 GPU 组件
+        void ensure_gpu_components();
+
+        std::unique_ptr<trtgpu::GpuPreprocessor> gpu_preprocessor_;
+        std::unique_ptr<trtgpu::GpuMaskDecoder> gpu_mask_decoder_;
     };
 } // namespace trtcv
 

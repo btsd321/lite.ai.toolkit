@@ -6,10 +6,13 @@
 #define LITE_AI_TOOLKIT_TRT_YOLO26_OBB_H
 
 #include <algorithm>
+#include <memory>
 
 #include "lite/trt/core/trt_core.h"
 #include "lite/trt/core/trt_utils.h"
+#include "lite/trt/gpu/gpu_preprocess.h"
 #include "lite/utils.h"
+#include <opencv2/core/cuda.hpp>
 
 namespace trtcv
 {
@@ -153,6 +156,33 @@ public:
                 float score_threshold = 0.25f,
                 float iou_threshold = 0.45f,
                 unsigned int topk = 300);
+
+    /// GPU 预处理 + 推理（cv::Mat 输入，自动上传）
+    void detect_gpu(const cv::Mat &mat,
+                    std::vector<types::BoxfWithAngle> &detected_boxes,
+                    float score_threshold = 0.25f,
+                    float iou_threshold = 0.45f,
+                    unsigned int topk = 300);
+
+    /// GPU 预处理 + 推理（GpuMat 零拷贝输入）
+    void detect_gpu(const cv::cuda::GpuMat &gpu_mat,
+                    int img_height, int img_width,
+                    std::vector<types::BoxfWithAngle> &detected_boxes,
+                    float score_threshold = 0.25f,
+                    float iou_threshold = 0.45f,
+                    unsigned int topk = 300);
+
+private:
+    /// detect_gpu 核心实现
+    void detect_gpu_impl(const trtgpu::ScaleParams &scale_params,
+                         int img_height, int img_width,
+                         std::vector<types::BoxfWithAngle> &detected_boxes,
+                         float score_threshold, float iou_threshold,
+                         unsigned int topk);
+
+    void ensure_gpu_components();
+
+    std::unique_ptr<trtgpu::GpuPreprocessor> gpu_preprocessor_;
 };
 }  // namespace trtcv
 
