@@ -25,6 +25,12 @@ namespace trtcv
 
         ~TRTYoloV8Seg() override = default;
 
+        void set_class_names(const std::vector<std::string> &names)
+        {
+            custom_class_names = names;
+            use_custom_class_names = true;
+        }
+
     private:
         // Letterbox scale params
         typedef struct
@@ -42,6 +48,9 @@ namespace trtcv
         static constexpr const float scale_val      = 1.0 / 255.f;
         static constexpr const float mask_threshold = 0.5f;
         static constexpr const int   num_mask_coeffs = 32;
+
+        bool use_custom_class_names = false;
+        std::vector<std::string> custom_class_names;
 
         const char *class_names[80] = {
             "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",

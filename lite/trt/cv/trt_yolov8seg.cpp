@@ -96,7 +96,9 @@ void TRTYoloV8Seg::generate_detections(
         box.y2         = y2;
         box.score      = max_cls_conf;
         box.label      = label;
-        box.label_text = class_names[label];
+        box.label_text = (use_custom_class_names && label < custom_class_names.size())
+                             ? custom_class_names[label].c_str()
+                             : class_names[label];
         box.flag       = true;
         bbox_collection.push_back(box);
 
