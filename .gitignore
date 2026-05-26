@@ -18,4 +18,9 @@ ultralytics
 YOLOv8-TensorRT
 
 .vscode/
+build/
+
+# graphify outputs
+graphify-out/
+raw/
 
