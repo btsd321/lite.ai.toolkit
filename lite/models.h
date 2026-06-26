@@ -145,6 +145,7 @@
 #include "lite/trt/cv/trt_yolo26_obb.h"
 #include "lite/trt/cv/trt_yolov11.h"
 #include "lite/trt/cv/trt_yolov8seg.h"
+#include "lite/trt/cv/trt_yolo26seg.h"
 #include "lite/trt/cv/trt_modnet.h"
 #include "lite/trt/cv/trt_yolov5_blazeface.h"
 #include "lite/trt/cv/trt_lightenhance.h"
@@ -792,6 +793,7 @@ namespace lite
             typedef trtcv::TRTYOLOV11 _TRT_YOLOV11;
             typedef trtcv::TRTYOLO5Face _TRT_YOLO5Face;
             typedef trtcv::TRTYoloV8Seg _TRT_YOLOv8Seg;
+            typedef trtcv::TRTYolo26Seg _TRT_YOLO26Seg;
             typedef trtcv::TRTLightEnhance _TRT_LightEnhance;
             typedef trtcv::TRTRealESRGAN _TRT_RealESRGAN;
             typedef trtcv::TRTMODNet _TRT_MODNet;
@@ -822,6 +824,7 @@ namespace lite
             namespace instance_segmentation
             {
                 typedef _TRT_YOLOv8Seg YOLOV8Seg;
+                typedef _TRT_YOLO26Seg YOLO26Seg;
             }
             namespace face
             {
