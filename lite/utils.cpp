@@ -568,6 +568,45 @@ void lite::utils::offset_nms(std::vector<types::Boxf> &input, std::vector<types:
 
 }
 
+// class-agnostic NMS：跨类别按 IoU 抑制，返回保留框下标（按 score 降序），不修改 input。
+// 调用方可将同一组下标应用到任意并行数组（分割 mask 系数 / mask 等）。
+void lite::utils::agnostic_nms_indices(const std::vector<types::Boxf> &input,
+                                       std::vector<unsigned int> &keep_indices,
+                                       float iou_threshold, unsigned int topk)
+{
+  keep_indices.clear();
+  if (input.empty()) return;
+
+  // 按 score 降序得到下标顺序（不改动 input 本身）
+  std::vector<unsigned int> order(input.size());
+  for (unsigned int i = 0; i < order.size(); ++i) order[i] = i;
+  std::sort(order.begin(), order.end(),
+            [&input](unsigned int a, unsigned int b)
+            { return input[a].score > input[b].score; });
+
+  const unsigned int box_num = static_cast<unsigned int>(order.size());
+  std::vector<int> merged(box_num, 0);
+
+  for (unsigned int i = 0; i < box_num; ++i)
+  {
+    if (merged[i]) continue;
+    keep_indices.push_back(order[i]);  // 保留原始下标
+    merged[i] = 1;
+
+    for (unsigned int j = i + 1; j < box_num; ++j)
+    {
+      if (merged[j]) continue;
+      // class-agnostic：不比较 label，仅按 IoU 抑制
+      float iou = static_cast<float>(input[order[i]].iou_of(input[order[j]]));
+      if (iou > iou_threshold)
+        merged[j] = 1;
+    }
+
+    if (keep_indices.size() >= topk)
+      break;
+  }
+}
+
 // Matting Utils & Segmentation Utils
 void lite::utils::swap_background(const cv::Mat &fgr_mat, const cv::Mat &pha_mat,
                                   const cv::Mat &bgr_mat, cv::Mat &out_mat,

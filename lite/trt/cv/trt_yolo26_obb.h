@@ -118,7 +118,8 @@ private:
     void nms_obb(std::vector<types::BoxfWithAngle> &input,
                  std::vector<types::BoxfWithAngle> &output,
                  float iou_threshold,
-                 unsigned int topk);
+                 unsigned int topk,
+                 bool agnostic = false);
 
     float compute_obb_iou(const types::BoxfWithAngle &box1,
                           const types::BoxfWithAngle &box2);
@@ -153,32 +154,25 @@ public:
      */
     void detect(const cv::Mat &mat,
                 std::vector<types::BoxfWithAngle> &detected_boxes,
-                float score_threshold = 0.25f,
-                float iou_threshold = 0.45f,
-                unsigned int topk = 300);
+                const types::InferParams &params = types::InferParams());
 
     /// GPU 预处理 + 推理（cv::Mat 输入，自动上传）
     void detect_gpu(const cv::Mat &mat,
                     std::vector<types::BoxfWithAngle> &detected_boxes,
-                    float score_threshold = 0.25f,
-                    float iou_threshold = 0.45f,
-                    unsigned int topk = 300);
+                    const types::InferParams &params = types::InferParams());
 
     /// GPU 预处理 + 推理（GpuMat 零拷贝输入）
     void detect_gpu(const cv::cuda::GpuMat &gpu_mat,
                     int img_height, int img_width,
                     std::vector<types::BoxfWithAngle> &detected_boxes,
-                    float score_threshold = 0.25f,
-                    float iou_threshold = 0.45f,
-                    unsigned int topk = 300);
+                    const types::InferParams &params = types::InferParams());
 
 private:
     /// detect_gpu 核心实现
     void detect_gpu_impl(const trtgpu::ScaleParams &scale_params,
                          int img_height, int img_width,
                          std::vector<types::BoxfWithAngle> &detected_boxes,
-                         float score_threshold, float iou_threshold,
-                         unsigned int topk);
+                         const types::InferParams &params);
 
     void ensure_gpu_components();
 

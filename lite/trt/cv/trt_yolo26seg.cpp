@@ -110,6 +110,31 @@ void TRTYolo26Seg::generate_detections(
 #endif
 }
 
+namespace
+{
+    // 应用 class-agnostic NMS：调用公共 lite::utils::agnostic_nms_indices 得到保留下标，
+    // 再同步裁剪 boxes 与其一一对应的 mask 系数。
+    void apply_agnostic_nms(std::vector<lite::types::Boxf> &boxes,
+                            std::vector<std::vector<float>> &mask_coeffs,
+                            float iou_threshold, unsigned int topk)
+    {
+        std::vector<unsigned int> keep;
+        lite::utils::agnostic_nms_indices(boxes, keep, iou_threshold, topk);
+
+        std::vector<lite::types::Boxf> kept_boxes;
+        std::vector<std::vector<float>> kept_coeffs;
+        kept_boxes.reserve(keep.size());
+        kept_coeffs.reserve(keep.size());
+        for (unsigned int id : keep)
+        {
+            kept_boxes.push_back(boxes[id]);
+            kept_coeffs.push_back(mask_coeffs[id]);
+        }
+        boxes.swap(kept_boxes);
+        mask_coeffs.swap(kept_coeffs);
+    }
+}  // namespace
+
 cv::Mat TRTYolo26Seg::decode_single_mask(
     const std::vector<float> &coeffs,
     const float *proto_data,
@@ -169,8 +194,7 @@ cv::Mat TRTYolo26Seg::decode_single_mask(
 void TRTYolo26Seg::detect(
     const cv::Mat &mat,
     std::vector<types::BoxfWithSegMask> &detected_objects,
-    float score_threshold, float /*iou_threshold*/,
-    unsigned int topk, unsigned int /*nms_type*/)
+    const types::InferParams &params)
 {
     if (mat.empty()) return;
 
@@ -225,10 +249,17 @@ void TRTYolo26Seg::detect(
     std::vector<types::Boxf> bbox_collection;
     std::vector<std::vector<float>> mask_coeffs_collection;
     generate_detections(scale_params, bbox_collection, mask_coeffs_collection,
-                        det_output.data(), score_threshold, img_height, img_width);
+                        det_output.data(), params.score_threshold, img_height, img_width);
+
+    // 5.1 class-agnostic 去重（可选）：合并同目标多类别重复框
+    if (params.agnostic_nms)
+    {
+        apply_agnostic_nms(bbox_collection, mask_coeffs_collection,
+                           params.iou_threshold, params.topk);
+    }
 
     // 6. topk 限制（按 score 降序）
-    if (bbox_collection.size() > topk)
+    if (bbox_collection.size() > params.topk)
     {
         std::vector<unsigned int> idx(bbox_collection.size());
         for (unsigned int i = 0; i < idx.size(); ++i) idx[i] = i;
@@ -237,7 +268,7 @@ void TRTYolo26Seg::detect(
                   { return bbox_collection[a].score > bbox_collection[b].score; });
         std::vector<types::Boxf> tmp_boxes;
         std::vector<std::vector<float>> tmp_coeffs;
-        for (unsigned int t = 0; t < topk; ++t)
+        for (unsigned int t = 0; t < params.topk; ++t)
         {
             tmp_boxes.push_back(bbox_collection[idx[t]]);
             tmp_coeffs.push_back(mask_coeffs_collection[idx[t]]);
@@ -285,8 +316,7 @@ void TRTYolo26Seg::ensure_gpu_components()
 void TRTYolo26Seg::detect_gpu(
     const cv::Mat &mat,
     std::vector<GpuSegDetection> &detected_objects,
-    float score_threshold, float iou_threshold,
-    unsigned int topk)
+    const types::InferParams &params)
 {
     if (mat.empty()) return;
     ensure_gpu_components();
@@ -295,16 +325,14 @@ void TRTYolo26Seg::detect_gpu(
     gpu_preprocessor_->preprocess(mat, static_cast<float*>(buffers[0]),
                                   sp, stream, /*bgr2rgb=*/true);
 
-    detect_gpu_impl(sp, mat.rows, mat.cols,
-                    detected_objects, score_threshold, iou_threshold, topk);
+    detect_gpu_impl(sp, mat.rows, mat.cols, detected_objects, params);
 }
 
 void TRTYolo26Seg::detect_gpu(
     const cv::cuda::GpuMat &gpu_mat,
     int img_height, int img_width,
     std::vector<GpuSegDetection> &detected_objects,
-    float score_threshold, float iou_threshold,
-    unsigned int topk)
+    const types::InferParams &params)
 {
     if (gpu_mat.empty()) return;
     ensure_gpu_components();
@@ -313,16 +341,14 @@ void TRTYolo26Seg::detect_gpu(
     gpu_preprocessor_->preprocess(gpu_mat, static_cast<float*>(buffers[0]),
                                   sp, stream, /*bgr2rgb=*/true);
 
-    detect_gpu_impl(sp, img_height, img_width,
-                    detected_objects, score_threshold, iou_threshold, topk);
+    detect_gpu_impl(sp, img_height, img_width, detected_objects, params);
 }
 
 void TRTYolo26Seg::detect_gpu_impl(
     const trtgpu::ScaleParams &sp,
     int img_height, int img_width,
     std::vector<GpuSegDetection> &detected_objects,
-    float score_threshold, float /*iou_threshold*/,
-    unsigned int topk)
+    const types::InferParams &params)
 {
     // 1. TRT 推理
     cudaStreamSynchronize(stream);
@@ -355,10 +381,17 @@ void TRTYolo26Seg::detect_gpu_impl(
     std::vector<types::Boxf> bbox_collection;
     std::vector<std::vector<float>> mask_coeffs_collection;
     generate_detections(yolo_sp, bbox_collection, mask_coeffs_collection,
-                        det_output.data(), score_threshold, img_height, img_width);
+                        det_output.data(), params.score_threshold, img_height, img_width);
+
+    // 4.1 class-agnostic 去重（可选）：合并同目标多类别重复框
+    if (params.agnostic_nms)
+    {
+        apply_agnostic_nms(bbox_collection, mask_coeffs_collection,
+                           params.iou_threshold, params.topk);
+    }
 
     // 5. topk 限制（按 score 降序）
-    if (bbox_collection.size() > topk)
+    if (bbox_collection.size() > params.topk)
     {
         std::vector<unsigned int> idx(bbox_collection.size());
         for (unsigned int i = 0; i < idx.size(); ++i) idx[i] = i;
@@ -367,7 +400,7 @@ void TRTYolo26Seg::detect_gpu_impl(
                   { return bbox_collection[a].score > bbox_collection[b].score; });
         std::vector<types::Boxf> tmp_boxes;
         std::vector<std::vector<float>> tmp_coeffs;
-        for (unsigned int t = 0; t < topk; ++t)
+        for (unsigned int t = 0; t < params.topk; ++t)
         {
             tmp_boxes.push_back(bbox_collection[idx[t]]);
             tmp_coeffs.push_back(mask_coeffs_collection[idx[t]]);

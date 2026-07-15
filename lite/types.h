@@ -275,6 +275,20 @@ namespace lite
             BoxfWithSegMaskType() : flag(false) {};
         } BoxfWithSegMask;
 
+        // 分割/检测推理参数（统一以引用传入 detect / detect_gpu）
+        typedef struct LITE_EXPORTS InferParamsType
+        {
+            float score_threshold = 0.25f;  // 置信度阈值
+            float iou_threshold   = 0.45f;  // NMS / class-agnostic 去重的 IoU 阈值
+            unsigned int topk     = 100;    // 保留检测框上限
+            unsigned int nms_type = 0;      // NMS 类型（仅 YOLOv8-seg 使用，YOLO26 忽略）
+            // class-agnostic 去重开关：跨类别按 IoU>iou_threshold 抑制，保留高分框。
+            // 用于 YOLO26 端到端模型对同一目标输出多个不同类别重复框的场景。
+            bool agnostic_nms     = false;
+
+            InferParamsType() = default;
+        } InferParams;
+
         // alias
         typedef SegmentationMaskContent HairSegContent;
         typedef SegmentationMaskContent HeadSegContent;

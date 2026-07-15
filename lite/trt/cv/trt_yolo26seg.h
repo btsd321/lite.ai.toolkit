@@ -100,10 +100,7 @@ namespace trtcv
     public:
         void detect(const cv::Mat &mat,
                     std::vector<types::BoxfWithSegMask> &detected_objects,
-                    float score_threshold = 0.25f,
-                    float iou_threshold   = 0.45f,
-                    unsigned int topk     = 100,
-                    unsigned int nms_type = 0);
+                    const types::InferParams &params = types::InferParams());
 
         /// GPU 推理结果：bbox + GPU 上的二值 mask
         struct GpuSegDetection
@@ -116,25 +113,20 @@ namespace trtcv
         /// GPU 输入 + GPU mask 输出（cv::Mat 输入会自动上传）
         void detect_gpu(const cv::Mat &mat,
                         std::vector<GpuSegDetection> &detected_objects,
-                        float score_threshold = 0.25f,
-                        float iou_threshold   = 0.45f,
-                        unsigned int topk     = 100);
+                        const types::InferParams &params = types::InferParams());
 
         /// GPU 输入 + GPU mask 输出（零拷贝 GpuMat 输入）
         void detect_gpu(const cv::cuda::GpuMat &gpu_mat,
                         int img_height, int img_width,
                         std::vector<GpuSegDetection> &detected_objects,
-                        float score_threshold = 0.25f,
-                        float iou_threshold   = 0.45f,
-                        unsigned int topk     = 100);
+                        const types::InferParams &params = types::InferParams());
 
     private:
         /// detect_gpu 核心实现（预处理已完成，从 TRT 推理开始）
         void detect_gpu_impl(const trtgpu::ScaleParams &scale_params,
                              int img_height, int img_width,
                              std::vector<GpuSegDetection> &detected_objects,
-                             float score_threshold, float iou_threshold,
-                             unsigned int topk);
+                             const types::InferParams &params);
 
         /// 按需初始化 GPU 组件
         void ensure_gpu_components();

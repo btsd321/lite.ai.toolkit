@@ -348,7 +348,8 @@ float TRTYOLO26OBB::compute_obb_iou(const types::BoxfWithAngle &box1,
 void TRTYOLO26OBB::nms_obb(std::vector<types::BoxfWithAngle> &input,
                            std::vector<types::BoxfWithAngle> &output,
                            float iou_threshold,
-                           unsigned int topk)
+                           unsigned int topk,
+                           bool agnostic)
 {
     if (input.empty())
         return;
@@ -376,12 +377,12 @@ void TRTYOLO26OBB::nms_obb(std::vector<types::BoxfWithAngle> &input,
             if (suppressed[j])
                 continue;
 
-            // Only NMS for same class
-            if (input[i].label != input[j].label)
+            // class-agnostic 时跨类别一起抑制；否则仅同类别 NMS
+            if (!agnostic && input[i].label != input[j].label)
                 continue;
 
             float iou = compute_obb_iou(input[i], input[j]);
-            
+
             if (iou > iou_threshold)
             {
                 suppressed[j] = true;
@@ -392,9 +393,7 @@ void TRTYOLO26OBB::nms_obb(std::vector<types::BoxfWithAngle> &input,
 
 void TRTYOLO26OBB::detect(const cv::Mat &mat,
                           std::vector<types::BoxfWithAngle> &detected_boxes,
-                          float score_threshold,
-                          float iou_threshold,
-                          unsigned int topk)
+                          const types::InferParams &params)
 {
     if (mat.empty())
         return;
@@ -458,11 +457,19 @@ void TRTYOLO26OBB::detect(const cv::Mat &mat,
     if (is_end2end_)
     {
         // End-to-end model: NMS already applied in engine
-        this->generate_bboxes_obb(scale_params, detected_boxes, output.data(), 
-                                  score_threshold, img_height, img_width);
-        
+        this->generate_bboxes_obb(scale_params, detected_boxes, output.data(),
+                                  params.score_threshold, img_height, img_width);
+
+        // 4.1 可选 class-agnostic 去重：端到端模型可能对同一目标输出多类别重复框
+        if (params.agnostic_nms)
+        {
+            std::vector<types::BoxfWithAngle> merged;
+            this->nms_obb(detected_boxes, merged, params.iou_threshold, params.topk, /*agnostic=*/true);
+            detected_boxes.swap(merged);
+        }
+
         // 5. Apply topk limit if needed
-        if (detected_boxes.size() > topk)
+        if (detected_boxes.size() > params.topk)
         {
             // Sort by confidence score
             std::sort(detected_boxes.begin(), detected_boxes.end(),
@@ -470,7 +477,7 @@ void TRTYOLO26OBB::detect(const cv::Mat &mat,
                       {
                           return a.score > b.score;
                       });
-            detected_boxes.resize(topk);
+            detected_boxes.resize(params.topk);
         }
     }
     else
@@ -478,10 +485,11 @@ void TRTYOLO26OBB::detect(const cv::Mat &mat,
         // Non-end-to-end model: need to apply NMS manually
         std::vector<types::BoxfWithAngle> bbox_collection;
         this->generate_bboxes_obb_non_end2end(scale_params, bbox_collection, output.data(),
-                                               score_threshold, img_height, img_width);
-        
+                                               params.score_threshold, img_height, img_width);
+
         // 5. Apply NMS
-        this->nms_obb(bbox_collection, detected_boxes, iou_threshold, topk);
+        this->nms_obb(bbox_collection, detected_boxes, params.iou_threshold, params.topk,
+                      params.agnostic_nms);
     }
 
 #if LITETRT_DEBUG
@@ -504,8 +512,7 @@ void TRTYOLO26OBB::ensure_gpu_components()
 void TRTYOLO26OBB::detect_gpu(
     const cv::Mat &mat,
     std::vector<types::BoxfWithAngle> &detected_boxes,
-    float score_threshold, float iou_threshold,
-    unsigned int topk)
+    const types::InferParams &params)
 {
     if (mat.empty()) return;
     ensure_gpu_components();
@@ -515,16 +522,14 @@ void TRTYOLO26OBB::detect_gpu(
     gpu_preprocessor_->preprocess(mat, static_cast<float*>(buffers[0]),
                                   sp, stream, bgr2rgb);
 
-    detect_gpu_impl(sp, mat.rows, mat.cols,
-                    detected_boxes, score_threshold, iou_threshold, topk);
+    detect_gpu_impl(sp, mat.rows, mat.cols, detected_boxes, params);
 }
 
 void TRTYOLO26OBB::detect_gpu(
     const cv::cuda::GpuMat &gpu_mat,
     int img_height, int img_width,
     std::vector<types::BoxfWithAngle> &detected_boxes,
-    float score_threshold, float iou_threshold,
-    unsigned int topk)
+    const types::InferParams &params)
 {
     if (gpu_mat.empty()) return;
     ensure_gpu_components();
@@ -534,16 +539,14 @@ void TRTYOLO26OBB::detect_gpu(
     gpu_preprocessor_->preprocess(gpu_mat, static_cast<float*>(buffers[0]),
                                   sp, stream, bgr2rgb);
 
-    detect_gpu_impl(sp, img_height, img_width,
-                    detected_boxes, score_threshold, iou_threshold, topk);
+    detect_gpu_impl(sp, img_height, img_width, detected_boxes, params);
 }
 
 void TRTYOLO26OBB::detect_gpu_impl(
     const trtgpu::ScaleParams &sp,
     int img_height, int img_width,
     std::vector<types::BoxfWithAngle> &detected_boxes,
-    float score_threshold, float iou_threshold,
-    unsigned int topk)
+    const types::InferParams &params)
 {
     if (output_node_dims.empty() || output_node_dims[0].empty())
     {
@@ -585,21 +588,31 @@ void TRTYOLO26OBB::detect_gpu_impl(
     if (is_end2end_)
     {
         generate_bboxes_obb(yolo_sp, detected_boxes, output.data(),
-                            score_threshold, img_height, img_width);
-        if (detected_boxes.size() > topk)
+                            params.score_threshold, img_height, img_width);
+
+        // 可选 class-agnostic 去重：端到端模型可能对同一目标输出多类别重复框
+        if (params.agnostic_nms)
+        {
+            std::vector<types::BoxfWithAngle> merged;
+            nms_obb(detected_boxes, merged, params.iou_threshold, params.topk, /*agnostic=*/true);
+            detected_boxes.swap(merged);
+        }
+
+        if (detected_boxes.size() > params.topk)
         {
             std::sort(detected_boxes.begin(), detected_boxes.end(),
                       [](const types::BoxfWithAngle &a, const types::BoxfWithAngle &b)
                       { return a.score > b.score; });
-            detected_boxes.resize(topk);
+            detected_boxes.resize(params.topk);
         }
     }
     else
     {
         std::vector<types::BoxfWithAngle> bbox_collection;
         generate_bboxes_obb_non_end2end(yolo_sp, bbox_collection, output.data(),
-                                         score_threshold, img_height, img_width);
-        nms_obb(bbox_collection, detected_boxes, iou_threshold, topk);
+                                         params.score_threshold, img_height, img_width);
+        nms_obb(bbox_collection, detected_boxes, params.iou_threshold, params.topk,
+                params.agnostic_nms);
     }
 
 #if LITETRT_DEBUG

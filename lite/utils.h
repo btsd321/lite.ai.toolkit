@@ -36,6 +36,13 @@ namespace lite
     LITE_EXPORTS void hard_nms(std::vector<types::Boxf> &input, std::vector<types::Boxf> &output, float iou_threshold, unsigned int topk);
     LITE_EXPORTS void blending_nms(std::vector<types::Boxf> &input, std::vector<types::Boxf> &output, float iou_threshold, unsigned int topk);
     LITE_EXPORTS void offset_nms(std::vector<types::Boxf> &input, std::vector<types::Boxf> &output, float iou_threshold, unsigned int topk);
+    // class-agnostic NMS：跨类别按 IoU>iou_threshold 抑制，保留高分框。
+    // 返回保留框的下标（按 score 降序），不修改 input，便于调用方将同一组下标
+    // 应用到任意并行数组（如分割 mask 系数、mask），供检测/分割等模型统一复用。
+    // 典型用途：YOLO26 端到端模型对同一目标输出多个不同类别重复框（IoU≈1.0）的去重。
+    LITE_EXPORTS void agnostic_nms_indices(const std::vector<types::Boxf> &input,
+                                           std::vector<unsigned int> &keep_indices,
+                                           float iou_threshold, unsigned int topk);
     // Matting & Segmentation Utils
     LITE_EXPORTS void swap_background(const cv::Mat &fgr_mat, const cv::Mat &pha_mat, const cv::Mat &bgr_mat, cv::Mat &out_mat, bool fgr_is_already_mul_pha = false);
     LITE_EXPORTS void remove_small_connected_area(cv::Mat &alpha_pred, float threshold = 0.05f);

@@ -218,8 +218,7 @@ cv::Mat TRTYoloV8Seg::decode_single_mask(
 void TRTYoloV8Seg::detect(
     const cv::Mat &mat,
     std::vector<types::BoxfWithSegMask> &detected_objects,
-    float score_threshold, float iou_threshold,
-    unsigned int topk, unsigned int /*nms_type*/)
+    const types::InferParams &params)
 {
     if (mat.empty()) return;
 
@@ -274,13 +273,13 @@ void TRTYoloV8Seg::detect(
     std::vector<types::Boxf> bbox_collection;
     std::vector<std::vector<float>> mask_coeffs_collection;
     generate_detections(scale_params, bbox_collection, mask_coeffs_collection,
-                        det_output.data(), score_threshold, img_height, img_width);
+                        det_output.data(), params.score_threshold, img_height, img_width);
 
-    // 6. NMS
+    // 6. NMS（本实现为 class-agnostic）
     std::vector<types::Boxf> nms_boxes;
     std::vector<std::vector<float>> nms_coeffs;
     this->nms(bbox_collection, nms_boxes, mask_coeffs_collection, nms_coeffs,
-              iou_threshold, topk);
+              params.iou_threshold, params.topk);
 
     // 7. Decode masks
     int proto_c = static_cast<int>(proto_dims[1]);
@@ -321,8 +320,7 @@ void TRTYoloV8Seg::ensure_gpu_components()
 void TRTYoloV8Seg::detect_gpu(
     const cv::Mat &mat,
     std::vector<GpuSegDetection> &detected_objects,
-    float score_threshold, float iou_threshold,
-    unsigned int topk)
+    const types::InferParams &params)
 {
     if (mat.empty()) return;
     ensure_gpu_components();
@@ -331,16 +329,14 @@ void TRTYoloV8Seg::detect_gpu(
     gpu_preprocessor_->preprocess(mat, static_cast<float*>(buffers[0]),
                                   sp, stream, /*bgr2rgb=*/true);
 
-    detect_gpu_impl(sp, mat.rows, mat.cols,
-                    detected_objects, score_threshold, iou_threshold, topk);
+    detect_gpu_impl(sp, mat.rows, mat.cols, detected_objects, params);
 }
 
 void TRTYoloV8Seg::detect_gpu(
     const cv::cuda::GpuMat &gpu_mat,
     int img_height, int img_width,
     std::vector<GpuSegDetection> &detected_objects,
-    float score_threshold, float iou_threshold,
-    unsigned int topk)
+    const types::InferParams &params)
 {
     if (gpu_mat.empty()) return;
     ensure_gpu_components();
@@ -349,16 +345,14 @@ void TRTYoloV8Seg::detect_gpu(
     gpu_preprocessor_->preprocess(gpu_mat, static_cast<float*>(buffers[0]),
                                   sp, stream, /*bgr2rgb=*/true);
 
-    detect_gpu_impl(sp, img_height, img_width,
-                    detected_objects, score_threshold, iou_threshold, topk);
+    detect_gpu_impl(sp, img_height, img_width, detected_objects, params);
 }
 
 void TRTYoloV8Seg::detect_gpu_impl(
     const trtgpu::ScaleParams &sp,
     int img_height, int img_width,
     std::vector<GpuSegDetection> &detected_objects,
-    float score_threshold, float iou_threshold,
-    unsigned int topk)
+    const types::InferParams &params)
 {
     // 1. TRT 推理
     cudaStreamSynchronize(stream);
@@ -391,12 +385,12 @@ void TRTYoloV8Seg::detect_gpu_impl(
     std::vector<types::Boxf> bbox_collection;
     std::vector<std::vector<float>> mask_coeffs_collection;
     generate_detections(yolo_sp, bbox_collection, mask_coeffs_collection,
-                        det_output.data(), score_threshold, img_height, img_width);
+                        det_output.data(), params.score_threshold, img_height, img_width);
 
     std::vector<types::Boxf> nms_boxes;
     std::vector<std::vector<float>> nms_coeffs;
     this->nms(bbox_collection, nms_boxes, mask_coeffs_collection, nms_coeffs,
-              iou_threshold, topk);
+              params.iou_threshold, params.topk);
 
     if (nms_boxes.empty())
     {
