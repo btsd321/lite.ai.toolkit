@@ -36,7 +36,6 @@ if(NOT CMAKE_CUDA_COMPILER AND "$ENV{CUDACXX}" STREQUAL "")
     set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
   endif()
 endif()
-enable_language(CUDA)
 
 # 启用 CUDA
 enable_language(CUDA)
