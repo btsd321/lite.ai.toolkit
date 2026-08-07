@@ -25,9 +25,18 @@ if (CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "-std=c++17 -Wno-deprecated ${CMAKE_CXX_FLAGS} ")
     message(STATUS "[Linux GCC Compiler Options]+:-std=c++17 -Wno-deprecated")
 endif ()
-# 指定CUDA编译器
-set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
-set(CMAKE_CUDA_ARCHITECTURES 89) # For RTX 20xx series
+
+# 指定CUDA编译器：优先 CUDACXX / CMAKE_CUDA_COMPILER，回退 CUDA_DIR，最后才是默认符号链接
+if(NOT CMAKE_CUDA_COMPILER AND "$ENV{CUDACXX}" STREQUAL "")
+  if(DEFINED CUDA_DIR AND EXISTS "${CUDA_DIR}/bin/nvcc")
+    set(CMAKE_CUDA_COMPILER "${CUDA_DIR}/bin/nvcc")
+  elseif(DEFINED ENV{CUDA_HOME} AND EXISTS "$ENV{CUDA_HOME}/bin/nvcc")
+    set(CMAKE_CUDA_COMPILER "$ENV{CUDA_HOME}/bin/nvcc")
+  else()
+    set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
+  endif()
+endif()
+enable_language(CUDA)
 
 # 启用 CUDA
 enable_language(CUDA)
